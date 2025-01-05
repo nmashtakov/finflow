@@ -1,0 +1,4 @@
+openpyxl
+pandas
+sqlalchemy
+xlrd >= 2.0.1

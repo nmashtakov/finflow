@@ -4,8 +4,6 @@ from datetime import datetime
 from pendulum import timezone
 
 
-moscow_tz = timezone("Europe/Moscow")
-
 def print_data():
     print('Hello World')
 
@@ -20,7 +18,7 @@ dag = DAG(
     'first_dag',
     default_args=default_args,
     schedule_interval='24 17 * * *',
-    catchup=False 
+    catchup=False
 )
 
 t1 = PythonOperator(

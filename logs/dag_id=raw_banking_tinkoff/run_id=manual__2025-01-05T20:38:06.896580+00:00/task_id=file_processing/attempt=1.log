@@ -1,0 +1,31 @@
+[2025-01-05T20:38:08.392+0000] {local_task_job_runner.py:120} INFO - ::group::Pre task execution logs
+[2025-01-05T20:38:08.404+0000] {taskinstance.py:2076} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: raw_banking_tinkoff.file_processing manual__2025-01-05T20:38:06.896580+00:00 [queued]>
+[2025-01-05T20:38:08.407+0000] {taskinstance.py:2076} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: raw_banking_tinkoff.file_processing manual__2025-01-05T20:38:06.896580+00:00 [queued]>
+[2025-01-05T20:38:08.407+0000] {taskinstance.py:2306} INFO - Starting attempt 1 of 2
+[2025-01-05T20:38:08.412+0000] {taskinstance.py:2330} INFO - Executing <Task(PythonOperator): file_processing> on 2025-01-05 20:38:06.896580+00:00
+[2025-01-05T20:38:08.416+0000] {standard_task_runner.py:90} INFO - Running: ['airflow', 'tasks', 'run', 'raw_banking_tinkoff', 'file_processing', 'manual__2025-01-05T20:38:06.896580+00:00', '--job-id', '30', '--raw', '--subdir', 'DAGS_FOLDER/raw_banking_tinkoff.py', '--cfg-path', '/tmp/tmpmwo9_bus']
+[2025-01-05T20:38:08.417+0000] {standard_task_runner.py:91} INFO - Job 30: Subtask file_processing
+[2025-01-05T20:38:08.417+0000] {logging_mixin.py:188} WARNING - /home/airflow/.local/lib/python3.12/site-packages/airflow/task/task_runner/standard_task_runner.py:61 DeprecationWarning: This process (pid=480) is multi-threaded, use of fork() may lead to deadlocks in the child.
+[2025-01-05T20:38:08.418+0000] {standard_task_runner.py:63} INFO - Started process 482 to run task
+[2025-01-05T20:38:08.436+0000] {task_command.py:426} INFO - Running <TaskInstance: raw_banking_tinkoff.file_processing manual__2025-01-05T20:38:06.896580+00:00 [running]> on host 928815d407f9
+[2025-01-05T20:38:08.468+0000] {taskinstance.py:2648} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='nmashtakov' AIRFLOW_CTX_DAG_ID='raw_banking_tinkoff' AIRFLOW_CTX_TASK_ID='file_processing' AIRFLOW_CTX_EXECUTION_DATE='2025-01-05T20:38:06.896580+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-01-05T20:38:06.896580+00:00'
+[2025-01-05T20:38:08.469+0000] {taskinstance.py:430} INFO - ::endgroup::
+[2025-01-05T20:38:08.649+0000] {python.py:237} INFO - Done. Returned value was:    Дата операции Дата проводки  ... Тип кэшбэка                     load_dt
+0     31.12.2024    31.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+1     31.12.2024    31.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+2     31.12.2024    31.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+3     31.12.2024    31.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+4     31.12.2024    02.01.2025  ...       Рубли  2025-01-05T20:38:08.639063
+..           ...           ...  ...         ...                         ...
+69    04.12.2024    04.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+70    03.12.2024    06.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+71    03.12.2024    06.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+72    03.12.2024    03.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+73    03.12.2024    03.12.2024  ...         NaN  2025-01-05T20:38:08.639063
+
+[74 rows x 18 columns]
+[2025-01-05T20:38:08.656+0000] {taskinstance.py:441} INFO - ::group::Post task execution logs
+[2025-01-05T20:38:08.675+0000] {taskinstance.py:1206} INFO - Marking task as SUCCESS. dag_id=raw_banking_tinkoff, task_id=file_processing, run_id=manual__2025-01-05T20:38:06.896580+00:00, execution_date=20250105T203806, start_date=20250105T203808, end_date=20250105T203808
+[2025-01-05T20:38:08.690+0000] {local_task_job_runner.py:240} INFO - Task exited with return code 0
+[2025-01-05T20:38:08.698+0000] {taskinstance.py:3503} INFO - 0 downstream tasks scheduled from follow-on schedule check
+[2025-01-05T20:38:08.699+0000] {local_task_job_runner.py:222} INFO - ::endgroup::

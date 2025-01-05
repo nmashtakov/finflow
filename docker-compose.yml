@@ -12,8 +12,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   airflow_webserver:
-    image: apache/airflow:2.9.2
+    build: .
     container_name: airflow_webserver
+    env_file: 
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_DB}
@@ -26,11 +28,14 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - ./data:/opt/data
     command: webserver
 
   airflow_scheduler:
-    image: apache/airflow:2.9.2
+    build: .
     container_name: airflow_scheduler
+    env_file: 
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_DB}
@@ -41,6 +46,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/data
     command: scheduler
 
 volumes:

@@ -1,0 +1,111 @@
+[2025-01-05T21:22:57.894+0000] {local_task_job_runner.py:120} INFO - ::group::Pre task execution logs
+[2025-01-05T21:22:57.907+0000] {taskinstance.py:2076} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: raw_banking_tinkoff.load_db manual__2025-01-05T21:22:54.561851+00:00 [queued]>
+[2025-01-05T21:22:57.911+0000] {taskinstance.py:2076} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: raw_banking_tinkoff.load_db manual__2025-01-05T21:22:54.561851+00:00 [queued]>
+[2025-01-05T21:22:57.911+0000] {taskinstance.py:2306} INFO - Starting attempt 1 of 2
+[2025-01-05T21:22:57.915+0000] {taskinstance.py:2330} INFO - Executing <Task(PythonOperator): load_db> on 2025-01-05 21:22:54.561851+00:00
+[2025-01-05T21:22:57.919+0000] {standard_task_runner.py:90} INFO - Running: ['airflow', 'tasks', 'run', 'raw_banking_tinkoff', 'load_db', 'manual__2025-01-05T21:22:54.561851+00:00', '--job-id', '70', '--raw', '--subdir', 'DAGS_FOLDER/raw_banking_tinkoff.py', '--cfg-path', '/tmp/tmp3rkmbl_u']
+[2025-01-05T21:22:57.920+0000] {standard_task_runner.py:91} INFO - Job 70: Subtask load_db
+[2025-01-05T21:22:57.920+0000] {logging_mixin.py:188} WARNING - /home/airflow/.local/lib/python3.12/site-packages/airflow/task/task_runner/standard_task_runner.py:61 DeprecationWarning: This process (pid=185) is multi-threaded, use of fork() may lead to deadlocks in the child.
+[2025-01-05T21:22:57.921+0000] {standard_task_runner.py:63} INFO - Started process 187 to run task
+[2025-01-05T21:22:57.939+0000] {task_command.py:426} INFO - Running <TaskInstance: raw_banking_tinkoff.load_db manual__2025-01-05T21:22:54.561851+00:00 [running]> on host 6d9883a799ac
+[2025-01-05T21:22:57.972+0000] {taskinstance.py:2648} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='nmashtakov' AIRFLOW_CTX_DAG_ID='raw_banking_tinkoff' AIRFLOW_CTX_TASK_ID='load_db' AIRFLOW_CTX_EXECUTION_DATE='2025-01-05T21:22:54.561851+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-01-05T21:22:54.561851+00:00'
+[2025-01-05T21:22:57.973+0000] {taskinstance.py:430} INFO - ::endgroup::
+[2025-01-05T21:22:58.088+0000] {logging_mixin.py:188} INFO - *** *** finflow
+[2025-01-05T21:22:58.101+0000] {taskinstance.py:441} INFO - ::group::Post task execution logs
+[2025-01-05T21:22:58.102+0000] {taskinstance.py:2905} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1890, in _execute_context
+    self.dialect.do_executemany(
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/psycopg2.py", line 982, in do_executemany
+    context._psycopg2_fetched_rows = xtras.execute_values(
+                                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/psycopg2/extras.py", line 1299, in execute_values
+    cur.execute(b''.join(parts))
+psycopg2.errors.UndefinedColumn: column "Дата операции" of relation "banking_tinkoff" does not exist
+LINE 1: INSERT INTO banking_tinkoff ("Дата операции", "Дата платежа"...
+                                     ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.12/site-packages/airflow/models/taskinstance.py", line 465, in _execute_task
+    result = _execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/airflow/models/taskinstance.py", line 432, in _execute_callable
+    return execute_callable(context=context, **execute_callable_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/airflow/models/baseoperator.py", line 401, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/airflow/operators/python.py", line 235, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/airflow/operators/python.py", line 252, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/raw_banking_tinkoff.py", line 67, in load_db
+    load_df.to_sql(
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/util/_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/core/generic.py", line 3008, in to_sql
+    return sql.to_sql(
+           ^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 788, in to_sql
+    return pandas_sql.to_sql(
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 1958, in to_sql
+    total_inserted = sql_engine.insert_records(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 1507, in insert_records
+    raise err
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 1498, in insert_records
+    return table.insert(chunksize=chunksize, method=method)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 1059, in insert
+    num_inserted = exec_insert(conn, keys, chunk_iter)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/pandas/io/sql.py", line 951, in _execute_insert
+    result = conn.execute(self.table.insert(), data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1385, in execute
+    return meth(self, multiparams, params, _EMPTY_EXECUTION_OPTS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 334, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1577, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1953, in _execute_context
+    self._handle_dbapi_exception(
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2134, in _handle_dbapi_exception
+    util.raise_(
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1890, in _execute_context
+    self.dialect.do_executemany(
+  File "/home/airflow/.local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/psycopg2.py", line 982, in do_executemany
+    context._psycopg2_fetched_rows = xtras.execute_values(
+                                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.12/site-packages/psycopg2/extras.py", line 1299, in execute_values
+    cur.execute(b''.join(parts))
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "Дата операции" of relation "banking_tinkoff" does not exist
+LINE 1: INSERT INTO banking_tinkoff ("Дата операции", "Дата платежа"...
+                                     ^
+
+[SQL: INSERT INTO banking_tinkoff ("Дата операции", "Дата платежа", "Номер карты", "Статус", "Сумма операции", "Валюта операции", "Сумма платежа", "Валюта платежа", "Кэшбэк", "Категория", "MCC", "Описание", "Бонусы (включая кэшбэк)", "Округление на инвесткопилку", "Сумма операции с округлением", load_dt) VALUES (%(Дата_операции)s, %(Дата_платежа)s, %(Номер_карты)s, %(Статус)s, %(Сумма_операции)s, %(Валюта_операции)s, %(Сумма_платежа)s, %(Валюта_платежа)s, %(Кэшбэк)s, %(Категория)s, %(MCC)s, %(Описание)s, %(Бонусы_Aвключая_кэшбэкZ)s, %(Округление_на_инвесткопилку)s, %(Сумма_операции_с_округлением)s, %(load_dt)s)]
+[parameters: ({'Дата_операции': '01.12.2024 11:44:26', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -1300.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -1300.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Алина В.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 1300.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 11:44:41', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -270.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -270.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Екатерина Т.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 270.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 12:03:44', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': -1314.92, 'Валюта_операции': 'RUB', 'Сумма_платежа': -1314.92, 'Валюта_платежа': 'RUB', 'Кэшбэк': 13.0, 'Категория': 'Супермаркеты', 'MCC': 5411.0, 'Описание': 'Перекрёсток', 'Бонусы_Aвключая_кэшбэкZ': 13.0, 'Округление_на_инвесткопилку': 85.08, 'Сумма_операции_с_округлением': 1400.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 12:09:00', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': -570.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -570.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': 5.0, 'Категория': 'Супермаркеты', 'MCC': 5411.0, 'Описание': 'ВкусВилл', 'Бонусы_Aвключая_кэшбэкZ': 5.0, 'Округление_на_инвесткопилку': 30.0, 'Сумма_операции_с_округлением': 600.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 19:43:31', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': 12400.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 12400.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Алина В.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 12400.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 21:59:46', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -7000.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -7000.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Зайниддин Ш.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 7000.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '02.12.2024 17:58:28', 'Дата_платежа': '02.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': -409.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -409.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': 4.0, 'Категория': 'Сервис', 'MCC': 4215.0, 'Описание': 'Яндекс Доставка', 'Бонусы_Aвключая_кэшбэкZ': 4.0, 'Округление_на_инвесткопилку': 91.0, 'Сумма_операции_с_округлением': 500.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '03.12.2024 18:04:00', 'Дата_платежа': '03.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': 3816.2, 'Валюта_операции': 'RUB', 'Сумма_платежа': 3816.2, 'Валюта_платежа': 'RUB', 'Кэшбэк': -38.0, 'Категория': 'Ж/д билеты', 'MCC': 4112.0, 'Описание': 'РЖД', 'Бонусы_Aвключая_кэшбэкZ': -38.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 3816.2, 'load_dt': '05.01.2025 21:22:56'}  ... displaying 10 of 109 total bound parameter sets ...  {'Дата_операции': '31.12.2024 17:38:42', 'Дата_платежа': '31.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': 5307.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 5307.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': 6536.0, 'Описание': 'Пополнение. avito.ru MOSKVA RUS', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 5307.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '31.12.2024 17:39:21', 'Дата_платежа': '31.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': 5326.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 5326.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Перевод средств от организации', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 5326.0, 'load_dt': '05.01.2025 21:22:56'})]
+(Background on this error at: https://sqlalche.me/e/14/f405)
+[2025-01-05T21:22:58.109+0000] {taskinstance.py:1206} INFO - Marking task as UP_FOR_RETRY. dag_id=raw_banking_tinkoff, task_id=load_db, run_id=manual__2025-01-05T21:22:54.561851+00:00, execution_date=20250105T212254, start_date=20250105T212257, end_date=20250105T212258
+[2025-01-05T21:22:58.113+0000] {standard_task_runner.py:110} ERROR - Failed to execute job 70 for task load_db ((psycopg2.errors.UndefinedColumn) column "Дата операции" of relation "banking_tinkoff" does not exist
+LINE 1: INSERT INTO banking_tinkoff ("Дата операции", "Дата платежа"...
+                                     ^
+
+[SQL: INSERT INTO banking_tinkoff ("Дата операции", "Дата платежа", "Номер карты", "Статус", "Сумма операции", "Валюта операции", "Сумма платежа", "Валюта платежа", "Кэшбэк", "Категория", "MCC", "Описание", "Бонусы (включая кэшбэк)", "Округление на инвесткопилку", "Сумма операции с округлением", load_dt) VALUES (%(Дата_операции)s, %(Дата_платежа)s, %(Номер_карты)s, %(Статус)s, %(Сумма_операции)s, %(Валюта_операции)s, %(Сумма_платежа)s, %(Валюта_платежа)s, %(Кэшбэк)s, %(Категория)s, %(MCC)s, %(Описание)s, %(Бонусы_Aвключая_кэшбэкZ)s, %(Округление_на_инвесткопилку)s, %(Сумма_операции_с_округлением)s, %(load_dt)s)]
+[parameters: ({'Дата_операции': '01.12.2024 11:44:26', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -1300.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -1300.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Алина В.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 1300.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 11:44:41', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -270.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -270.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Екатерина Т.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 270.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 12:03:44', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': -1314.92, 'Валюта_операции': 'RUB', 'Сумма_платежа': -1314.92, 'Валюта_платежа': 'RUB', 'Кэшбэк': 13.0, 'Категория': 'Супермаркеты', 'MCC': 5411.0, 'Описание': 'Перекрёсток', 'Бонусы_Aвключая_кэшбэкZ': 13.0, 'Округление_на_инвесткопилку': 85.08, 'Сумма_операции_с_округлением': 1400.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 12:09:00', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': -570.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -570.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': 5.0, 'Категория': 'Супермаркеты', 'MCC': 5411.0, 'Описание': 'ВкусВилл', 'Бонусы_Aвключая_кэшбэкZ': 5.0, 'Округление_на_инвесткопилку': 30.0, 'Сумма_операции_с_округлением': 600.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 19:43:31', 'Дата_платежа': '01.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': 12400.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 12400.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Алина В.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 12400.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '01.12.2024 21:59:46', 'Дата_платежа': '01.12.2024', 'Номер_карты': None, 'Статус': 'OK', 'Сумма_операции': -7000.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -7000.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Зайниддин Ш.', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 7000.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '02.12.2024 17:58:28', 'Дата_платежа': '02.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': -409.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': -409.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': 4.0, 'Категория': 'Сервис', 'MCC': 4215.0, 'Описание': 'Яндекс Доставка', 'Бонусы_Aвключая_кэшбэкZ': 4.0, 'Округление_на_инвесткопилку': 91.0, 'Сумма_операции_с_округлением': 500.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '03.12.2024 18:04:00', 'Дата_платежа': '03.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': 3816.2, 'Валюта_операции': 'RUB', 'Сумма_платежа': 3816.2, 'Валюта_платежа': 'RUB', 'Кэшбэк': -38.0, 'Категория': 'Ж/д билеты', 'MCC': 4112.0, 'Описание': 'РЖД', 'Бонусы_Aвключая_кэшбэкZ': -38.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 3816.2, 'load_dt': '05.01.2025 21:22:56'}  ... displaying 10 of 109 total bound parameter sets ...  {'Дата_операции': '31.12.2024 17:38:42', 'Дата_платежа': '31.12.2024', 'Номер_карты': '*7277', 'Статус': 'OK', 'Сумма_операции': 5307.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 5307.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': 6536.0, 'Описание': 'Пополнение. avito.ru MOSKVA RUS', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 5307.0, 'load_dt': '05.01.2025 21:22:56'}, {'Дата_операции': '31.12.2024 17:39:21', 'Дата_платежа': '31.12.2024', 'Номер_карты': '*9688', 'Статус': 'OK', 'Сумма_операции': 5326.0, 'Валюта_операции': 'RUB', 'Сумма_платежа': 5326.0, 'Валюта_платежа': 'RUB', 'Кэшбэк': None, 'Категория': 'Переводы', 'MCC': None, 'Описание': 'Перевод средств от организации', 'Бонусы_Aвключая_кэшбэкZ': 0.0, 'Округление_на_инвесткопилку': 0.0, 'Сумма_операции_с_округлением': 5326.0, 'load_dt': '05.01.2025 21:22:56'})]
+(Background on this error at: https://sqlalche.me/e/14/f405); 187)
+[2025-01-05T21:22:58.153+0000] {local_task_job_runner.py:240} INFO - Task exited with return code 1
+[2025-01-05T21:22:58.161+0000] {taskinstance.py:3503} INFO - 0 downstream tasks scheduled from follow-on schedule check
+[2025-01-05T21:22:58.162+0000] {local_task_job_runner.py:222} INFO - ::endgroup::
