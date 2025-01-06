@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine
 import shutil
+from airflow.exceptions import AirflowSkipException
 
 
 path = '/opt/data/banking/tinkoff/new'
@@ -21,7 +22,7 @@ def file_check(path, **kwargs):
 
     if not files:
         print(f'Файлы в {path} не найдены')
-        return []
+        raise AirflowSkipException(f'Файлы в {path} не найдены')
     else:
         kwargs['ti'].xcom_push(key='file_list', value=files)
         print(f'Список файлов передан: {files}')

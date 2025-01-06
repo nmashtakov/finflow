@@ -6005,3 +6005,80 @@ AttributeError: 'function' object has no attribute 'update_relative'
 [2025-01-05T21:51:31.044+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:51:31.044+0000] {dag.py:3096} INFO - Sync 1 DAGs
 [2025-01-05T21:51:31.050+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:51:31.050+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
 [2025-01-05T21:51:31.059+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.328 seconds
+[2025-01-05T21:52:01.169+0000] {processor.py:161} INFO - Started process (PID=929) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:01.170+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:52:01.171+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:01.171+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:01.334+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:01.347+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:01.347+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:52:01.421+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:01.421+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:52:01.428+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.264 seconds
+[2025-01-05T21:52:31.519+0000] {processor.py:161} INFO - Started process (PID=940) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:31.520+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:52:31.522+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:31.522+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:31.718+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:52:31.738+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:31.738+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:52:31.745+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:52:31.745+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:52:31.754+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.243 seconds
+[2025-01-05T21:53:01.848+0000] {processor.py:161} INFO - Started process (PID=951) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:01.849+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:53:01.851+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:01.851+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:01.992+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:02.005+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:02.005+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:53:02.010+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:02.010+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:53:02.017+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.175 seconds
+[2025-01-05T21:53:32.213+0000] {processor.py:161} INFO - Started process (PID=962) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:32.215+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:53:32.218+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:32.217+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:32.376+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:53:32.391+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:32.391+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:53:32.397+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:53:32.397+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:53:32.570+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.364 seconds
+[2025-01-05T21:54:03.571+0000] {processor.py:161} INFO - Started process (PID=973) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:03.573+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:54:03.576+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:03.576+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:03.755+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:03.771+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:03.771+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:54:03.845+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:03.845+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:54:03.852+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.289 seconds
+[2025-01-05T21:54:33.917+0000] {processor.py:161} INFO - Started process (PID=984) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:33.918+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:54:33.920+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:33.920+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:34.064+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:54:34.076+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:34.076+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:54:34.081+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:54:34.081+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:54:34.088+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.175 seconds
+[2025-01-05T21:55:04.596+0000] {processor.py:161} INFO - Started process (PID=995) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:04.597+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:55:04.599+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:04.599+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:04.806+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:04.823+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:04.823+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:55:04.830+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:04.830+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:55:04.838+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.250 seconds
+[2025-01-05T21:55:34.905+0000] {processor.py:161} INFO - Started process (PID=1006) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:34.906+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:55:34.907+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:34.907+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:35.053+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:55:35.065+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:35.065+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:55:35.070+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:55:35.070+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:55:35.077+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.177 seconds
+[2025-01-05T21:56:05.343+0000] {processor.py:161} INFO - Started process (PID=1017) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:05.345+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:56:05.346+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:05.346+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:05.485+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:05.498+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:05.498+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:56:05.622+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:05.622+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:56:05.629+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.290 seconds
+[2025-01-05T21:56:35.713+0000] {processor.py:161} INFO - Started process (PID=1028) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:35.714+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T21:56:35.716+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:35.716+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:35.852+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T21:56:35.927+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:35.927+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T21:56:35.931+0000] {logging_mixin.py:188} INFO - [2025-01-05T21:56:35.931+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T21:56:35.937+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.229 seconds
+[2025-01-05T23:03:24.959+0000] {processor.py:161} INFO - Started process (PID=1039) to work on /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T23:03:24.959+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/raw_banking_tinkoff.py for tasks to queue
+[2025-01-05T23:03:24.962+0000] {logging_mixin.py:188} INFO - [2025-01-05T23:03:24.961+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T23:03:25.323+0000] {processor.py:840} INFO - DAG(s) 'raw_banking_tinkoff' retrieved from /opt/airflow/dags/raw_banking_tinkoff.py
+[2025-01-05T23:03:25.337+0000] {logging_mixin.py:188} INFO - [2025-01-05T23:03:25.336+0000] {dag.py:3096} INFO - Sync 1 DAGs
+[2025-01-05T23:03:25.341+0000] {logging_mixin.py:188} INFO - [2025-01-05T23:03:25.341+0000] {dag.py:3954} INFO - Setting next_dagrun for raw_banking_tinkoff to None, run_after=None
+[2025-01-05T23:03:25.350+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/raw_banking_tinkoff.py took 0.399 seconds
