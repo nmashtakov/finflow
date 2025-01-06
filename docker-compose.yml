@@ -24,10 +24,10 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-      - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/airflow.cfg:/opt/airflow/airflow.cfg
       - ./data:/opt/data
     command: webserver
 
@@ -43,9 +43,9 @@ services:
       - postgres
       - airflow_webserver
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
       - ./data:/opt/data
     command: scheduler
 
