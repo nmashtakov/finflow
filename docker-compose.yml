@@ -12,7 +12,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   airflow_webserver:
-    build: .
+    build:
+      context: ./airflow
     container_name: airflow_webserver
     env_file: 
       - .env
@@ -32,7 +33,8 @@ services:
     command: webserver
 
   airflow_scheduler:
-    build: .
+    build:
+      context: ./airflow
     container_name: airflow_scheduler
     env_file: 
       - .env
@@ -48,6 +50,22 @@ services:
       - ./airflow/plugins:/opt/airflow/plugins
       - ./data:/opt/data
     command: scheduler
+
+  django:
+    build:
+      context: ./backend
+    container_name: django
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: python manage.py runserver 0.0.0.0:8000
 
 volumes:
   postgres_data:
