@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.shortcuts import render
-from backend.views import landing_view, dashboard_view
+from core.views import landing_view, dashboard_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),

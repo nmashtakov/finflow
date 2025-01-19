@@ -28,7 +28,7 @@ def profile_view(request):
     return render(request, 'accounts/profile.html')
 
 def register_view(request):
-    return render(request, 'error-404-2.html')
+    return render(request, 'core/error-404-2.html')
 
 def password_reset_view(request):
-    return render(request, 'error-404-2.html')
+    return render(request, 'core/error-404-2.html')
