@@ -1,0 +1,30 @@
+<div id="layoutSidenav_nav">
+    <nav class="sidenav shadow-right sidenav-light">
+        <div class="sidenav-menu">
+            <div class="nav accordion" id="accordionSidenav">
+                <div class="sidenav-menu-heading">Меню</div>
+                <a class="nav-link" href="{% url 'dashboard' %}">
+                    <div class="nav-link-icon"><i data-feather="activity"></i></div>
+                    Панель управления
+                </a>
+                {% if False %}
+                <a class="nav-link" href="{% url 'transactions' %}">
+                    <div class="nav-link-icon"><i data-feather="dollar-sign"></i></div>
+                    Транзакции
+                </a>
+                <a class="nav-link" href="{% url 'reports' %}">
+                    <div class="nav-link-icon"><i data-feather="bar-chart-2"></i></div>
+                    Отчёты
+                </a>
+                {% endif %}
+                <div class="sidenav-menu-heading">Дополнительно</div>
+                {% if user.is_superuser %}
+                <a class="nav-link" href="/admin/">
+                    <div class="nav-link-icon"><i data-feather="settings"></i></div>
+                    Admin панель
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+</div>

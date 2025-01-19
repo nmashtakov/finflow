@@ -1,114 +1,66 @@
+{% extends "components/base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="" />
-        <meta name="author" content="" />
-        <title>Login - SB Admin Pro</title>
-        <!-- Подключение стилей -->
-        <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
-        <link rel="icon" type="image/x-icon" href="{% static 'assets/img/favicon.png' %}" />
-        <!-- Внешние библиотеки -->
-        <script data-search-pseudo-elements defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/js/all.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.min.js" crossorigin="anonymous"></script>
-    </head>
-    <body class="bg-primary">
-        <div id="layoutAuthentication">
-            <div id="layoutAuthentication_content">
-                <main>
-                    <div class="container-xl px-4">
-                        <div class="row justify-content-center">
-                            <div class="col-xl-5 col-lg-6 col-md-8 col-sm-11">
-                                <!-- Social login form-->
-                                <div class="card my-5">
-                                    <div class="card-body p-5 text-center">
-                                        <div class="h3 fw-light mb-3">Sign In</div>
-                                        <!-- Social login links-->
-                                        <!-- <a class="btn btn-icon btn-facebook mx-1" href="#!"><i class="fab fa-facebook-f fa-fw fa-sm"></i></a> -->
-                                        <!-- <a class="btn btn-icon btn-github mx-1" href="#!"><i class="fab fa-github fa-fw fa-sm"></i></a> -->
-                                        <a class="btn btn-icon btn-google mx-1" href="#!"><i class="fab fa-google fa-fw fa-sm"></i></a>
-                                        <!-- <a class="btn btn-icon btn-twitter mx-1" href="#!"><i class="fab fa-twitter fa-fw fa-sm text-white"></i></a> -->
+
+{% block title %}Вход - FinFlow{% endblock %}
+
+{% block content %}
+<div id="layoutAuthentication">
+    <div id="layoutAuthentication_content">
+        <main>
+            <div class="container-xl px-4">
+                <div class="row justify-content-center">
+                    <div class="col-xl-5 col-lg-6 col-md-8 col-sm-11">
+                        <div class="card my-5">
+                            <div class="card-body p-5 text-center">
+                                <div class="h3 fw-light mb-3">Вход в FinFlow</div>
+                                <a class="btn btn-icon btn-google mx-1" href="#!"><i class="fab fa-google fa-fw fa-sm"></i></a>
+                            </div>
+                            <hr class="my-0" />
+                            <div class="card-body p-5">
+                                <form method="post" action="" class="user">
+                                    {% csrf_token %}
+                                    <div class="mb-3">
+                                        <label class="text-gray-600 small" for="id_username">Имя пользователя</label>
+                                        {{ form.username }}
+                                        {% if form.username.errors %}
+                                            <div class="text-danger">{{ form.username.errors }}</div>
+                                        {% endif %}
                                     </div>
-                                    <hr class="my-0" />
-                                    <div class="card-body p-5">
-                                        <!-- Login form-->
-                                        <form method="post" action="" class="user">
-                                            {% csrf_token %}
-                                            <!-- Поле для email -->
-                                            <div class="mb-3">
-                                                <label class="text-gray-600 small" for="id_username">Email address</label>
-                                                {{ form.username }}
-                                                {% if form.username.errors %}
-                                                    <div class="text-danger">
-                                                        {{ form.username.errors }}
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                            <!-- Поле для пароля -->
-                                            <div class="mb-3">
-                                                <label class="text-gray-600 small" for="id_password">Password</label>
-                                                {{ form.password }}
-                                                {% if form.password.errors %}
-                                                    <div class="text-danger">
-                                                        {{ form.password.errors }}
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                            <!-- Ссылка на восстановление пароля -->
-                                            <div class="mb-3">
-                                                <a class="small" href="{% static 'auth-password-social.html' %}">Forgot your password?</a>
-                                            </div>
-                                            <!-- Чекбокс для запоминания -->
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <!-- Кнопка отправки формы -->
-                                                <button type="submit" class="btn btn-primary">
-                                                    Login
-                                                </button>
-                                            </div>
-                                            <!-- Ошибки формы -->
-                                            {% if form.non_field_errors %}
-                                                <div class="mb-3"></div> <!-- Пропуск строки -->
-                                                <div class="alert alert-danger text-center">
-                                                    {% for error in form.non_field_errors %}
-                                                        {{ error }}
-                                                    {% endfor %}
-                                                </div>
-                                            {% endif %}
-                                        </form>
+                                    <div class="mb-3">
+                                        <label class="text-gray-600 small" for="id_password">Пароль</label>
+                                        {{ form.password }}
+                                        {% if form.password.errors %}
+                                            <div class="text-danger">{{ form.password.errors }}</div>
+                                        {% endif %}
                                     </div>
-                                    <hr class="my-0" />
-                                    <div class="card-body px-5 py-4">
-                                        <div class="small text-center">
-                                            New user?
-                                            <a href="{% static 'auth-register-social.html' %}">Create an account!</a>
+                                    <div class="mb-3">
+                                        <a class="small" href="{% url 'password_reset' %}">Забыли пароль?</a>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-between mb-0">
+                                        <button type="submit" class="btn btn-primary">Войти</button>
+                                    </div>
+                                    {% if form.non_field_errors %}
+                                        <div class="mb-3"></div>
+                                        <div class="alert alert-danger text-center">
+                                            {% for error in form.non_field_errors %}
+                                                {{ error }}
+                                            {% endfor %}
                                         </div>
-                                    </div>
+                                    {% endif %}
+                                </form>
+                            </div>
+                            <hr class="my-0" />
+                            <div class="card-body px-5 py-4">
+                                <div class="small text-center">
+                                    Новый пользователь?
+                                    <a href="{% url 'register' %}">Создайте аккаунт!</a>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </main>
+                </div>
             </div>
-            <div id="layoutAuthentication_footer">
-                <footer class="footer-admin mt-auto footer-dark">
-                    <div class="container-xl px-4">
-                        <div class="row">
-                            <div class="col-md-6 small">Copyright &copy; Your Website 2021</div>
-                            <div class="col-md-6 text-md-end small">
-                                <a href="#!">Privacy Policy</a>
-                                &middot;
-                                <a href="#!">Terms &amp; Conditions</a>
-                            </div>
-                        </div>
-                    </div>
-                </footer>
-            </div>
-        </div>
-        <!-- Скрипты -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-        <script src="{% static 'js/scripts.js' %}"></script>
-    </body>
-</html>
+        </main>
+    </div>
+</div>
+{% endblock %}

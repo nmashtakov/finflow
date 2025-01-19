@@ -1,0 +1,45 @@
+{% load static %}
+<nav class="topnav navbar navbar-expand shadow navbar-light bg-white" id="sidenavAccordion">
+    <!-- Кнопка для скрытия бокового меню -->
+    <button class="btn btn-icon btn-transparent-dark order-1 order-lg-0 me-2 ms-lg-2 me-lg-0" id="sidebarToggle">
+        <i data-feather="menu"></i>
+    </button>
+
+    <!-- Логотип -->
+    <a class="navbar-brand pe-3 ps-4 ps-lg-2" href="{% url 'landing' %}">FinFlow</a>
+
+    <!-- Панель справа -->
+    <ul class="navbar-nav align-items-center ms-auto">
+        {% if user.is_authenticated %}
+            <li class="nav-item dropdown no-caret dropdown-user me-3 me-lg-4">
+                <a class="btn btn-icon btn-transparent-dark dropdown-toggle" id="navbarDropdownUserImage"
+                   href="javascript:void(0);" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="img-fluid" src="{% static 'assets/img/illustrations/profiles/profile-cat-1.jpg' %}" />
+                </a>
+                <div class="dropdown-menu dropdown-menu-end border-0 shadow animated--fade-in-up"
+                     aria-labelledby="navbarDropdownUserImage">
+                    <h6 class="dropdown-header d-flex align-items-center">
+                        <img class="dropdown-user-img" src="{% static 'assets/img/illustrations/profiles/profile-cat-1.jpg' %}" />
+                        <div class="dropdown-user-details">
+                            <div class="dropdown-user-details-name">{{ user.username }}</div>
+                            <div class="dropdown-user-details-email">{{ user.email }}</div>
+                        </div>
+                    </h6>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="{% url 'profile' %}">
+                        <div class="dropdown-item-icon"><i data-feather="settings"></i></div>
+                        Профиль
+                    </a>
+                    <a class="dropdown-item" href="{% url 'logout' %}">
+                        <div class="dropdown-item-icon"><i data-feather="log-out"></i></div>
+                        Выйти
+                    </a>
+                </div>
+            </li>
+        {% else %}
+            <li class="nav-item me-3 me-lg-4">
+                <a class="btn btn-transparent-dark fw-semibold px-3" href="{% url 'login' %}">Войти</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
