@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from .forms import LoginForm
+from django.contrib.auth.decorators import login_required
 
 # Create your views here.
 def login_view(request):
@@ -32,3 +34,9 @@ def register_view(request):
 
 def password_reset_view(request):
     return render(request, 'core/error-404-2.html')
+
+@login_required
+def user_list(request):
+    users = User.objects.all()
+    return render(request, 'accounts/user-list.html', {'users': users})
+

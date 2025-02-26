@@ -1,0 +1,84 @@
+{% extends "components/base.html" %}
+
+{% block title %}Список пользователей{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Users List</h1>
+    <div class="card">
+        <div class="card-body">
+            <table id="usersTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Groups</th>
+                        <th>Joined Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar me-2">
+                                    <img class="avatar-img img-fluid" src="/static/assets/img/demo/user-placeholder.svg" />
+                                </div>
+                                {{ user.username }}
+                            </div>
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>{% if user.is_superuser %}Administrator{% else %}Registered{% endif %}</td>
+                        <td>
+                            {% for group in user.groups.all %}
+                                <span class="badge bg-primary">{{ group.name }}</span>
+                            {% empty %}
+                                <span class="text-muted">No group</span>
+                            {% endfor %}
+                        </td>
+                        <td>{{ user.date_joined|date:"d M Y" }}</td>
+                        <td>
+                            <a class="btn btn-datatable btn-icon btn-transparent-dark me-2" href="#"><i data-feather="edit"></i></a>
+                            <a class="btn btn-datatable btn-icon btn-transparent-dark" href="#"><i data-feather="trash-2"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">No users found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#usersTable').DataTable({
+            "language": {
+                "search": "Поиск:",
+                "lengthMenu": "Показать _MENU_ записей",
+                "info": "Показано _START_–_END_ из _TOTAL_ записей",
+                "paginate": {
+                    "first": "Первая",
+                    "last": "Последняя",
+                    "next": "Следующая",
+                    "previous": "Предыдущая"
+                }
+            },
+            "pageLength": 10, // Количество записей на странице
+            "ordering": true, // Включает сортировку
+            "paging": true, // Включает пагинацию
+            "searching": true, // Включает поиск
+            "info": true // Показывает количество записей
+        });
+    });
+</script>
+{% endblock %}
