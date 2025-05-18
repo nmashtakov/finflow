@@ -21,6 +21,19 @@
                     <div class="nav-link-icon"><i data-feather="bar-chart-2"></i></div>
                     Пользователи
                 </a>
+                <div class="sidenav-menu-heading">Настройки</div>
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseSettings"
+                    aria-expanded="false" aria-controls="collapseSettings">
+                    <div class="nav-link-icon"><i data-feather="settings"></i></div>
+                    Настройки
+                    <div class="sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                </a>
+                <div class="collapse" id="collapseSettings" data-bs-parent="#accordionSidenav">
+                    <nav class="sidenav-menu-nested nav">
+                        <a class="nav-link" href="{% url 'categories_settings' %}">Проекты и категории</a>
+                        <!-- другие подпункты -->
+                    </nav>
+                </div>
                 <div class="sidenav-menu-heading">Дополнительно</div>
                 {% if user.is_superuser %}
                 <a class="nav-link" href="/admin/">
