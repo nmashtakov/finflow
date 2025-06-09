@@ -1,7 +1,6 @@
 {% extends "components/base.html" %}
-{% load static %}
 
-{% block title %}Вход - FinFlow{% endblock %}
+{% block title %}Регистрация - FinFlow{% endblock %}
 
 {% block content %}
 <div id="layoutAuthentication">
@@ -12,36 +11,43 @@
                     <div class="col-xl-5 col-lg-6 col-md-8 col-sm-11">
                         <div class="card my-5">
                             <div class="card-body p-5 text-center">
-                                <div class="h3 fw-light mb-3">Вход в FinFlow</div>
-                                <a class="btn btn-icon btn-google mx-1" href="#!"><i class="fab fa-google fa-fw fa-sm"></i></a>
+                                <div class="h3 fw-light mb-3">Создание аккаунта</div>
                             </div>
                             <hr class="my-0" />
                             <div class="card-body p-5">
-                                <form method="post" action="" class="user">
+                                <form method="post">
                                     {% csrf_token %}
                                     <div class="mb-3">
-                                        <label class="text-gray-600 small" for="id_username">Логин пользователя</label>
+                                        <label class="text-gray-600 small" for="id_username" class="form-label">Логин пользователя</label>
                                         {{ form.username }}
                                         {% if form.username.errors %}
                                             <div class="text-danger small">{{ form.username.errors }}</div>
                                         {% endif %}
                                     </div>
                                     <div class="mb-3">
-                                        <label class="text-gray-600 small" for="id_password">Пароль</label>
+                                        <label class="text-gray-600 small" for="id_email" class="form-label">Email</label>
+                                        {{ form.email }}
+                                        {% if form.email.errors %}
+                                            <div class="text-danger small">{{ form.email.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-gray-600 small" for="id_password" class="form-label">Пароль</label>
                                         {{ form.password }}
                                         {% if form.password.errors %}
                                             <div class="text-danger small">{{ form.password.errors }}</div>
                                         {% endif %}
                                     </div>
                                     <div class="mb-3">
-                                        <a class="small" href="{% url 'password_reset' %}">Забыли пароль?</a>
+                                        <label class="text-gray-600 small" for="id_password_confirm" class="form-label">Повторите пароль</label>
+                                        {{ form.password_confirm }}
+                                        {% if form.password_confirm.errors %}
+                                            <div class="text-danger small">{{ form.password_confirm.errors }}</div>
+                                        {% endif %}
                                     </div>
-                                    <div class="d-flex align-items-center justify-content-between mb-0">
-                                        <button type="submit" class="btn btn-primary">Войти</button>
-                                    </div>
+                                    <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
                                     {% if form.non_field_errors %}
-                                        <div class="mb-3"></div>
-                                        <div class="alert alert-danger text-center small">
+                                        <div class="alert alert-danger text-center mt-3">
                                             {% for error in form.non_field_errors %}
                                                 {{ error }}
                                             {% endfor %}
@@ -52,8 +58,8 @@
                             <hr class="my-0" />
                             <div class="card-body px-5 py-4">
                                 <div class="small text-center">
-                                    Новый пользователь?
-                                    <a href="{% url 'register' %}">Создайте аккаунт!</a>
+                                    Уже есть аккаунт?
+                                    <a href="{% url 'login' %}">Войти!</a>
                                 </div>
                             </div>
                         </div>
