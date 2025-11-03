@@ -114,3 +114,18 @@ class CurrencyRate(models.Model):
 
     def __str__(self):
         return f"{self.currency} на {self.date}: {self.amount}"
+# === CURRENCY DIRECTORY ===
+class Currency(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Активна'),
+        ('archived', 'В архиве'),
+    )
+    code = models.CharField(max_length=8, unique=True)
+    name = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='active')
+
+    class Meta:
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} — {self.name}"

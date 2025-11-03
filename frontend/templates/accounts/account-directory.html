@@ -1,0 +1,337 @@
+{% extends "components/base.html" %}
+
+{% block title %}Справочники — Счета{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Счета</h1>
+            <p class="text-muted mb-0">Используются для учёта остатков и транзакций.</p>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#accountModal">
+            + Добавить счёт
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="accountsTable" class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Тип</th>
+                            <th>Валюта</th>
+                            <th>В балансе</th>
+                            <th>В расходах</th>
+                            <th class="text-end">Кредитный лимит</th>
+                            <th class="text-end">Целевая сумма</th>
+                            <th class="text-end">Текущий долг</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account, edit_form in accounts_with_forms %}
+                        <tr>
+                            <td>{{ account.name }}</td>
+                            <td>{{ account.get_account_type_display }}</td>
+                            <td>{{ account.currency }}</td>
+                            <td>
+                                {% if account.include_in_total %}
+                                    <span class="badge bg-success">Да</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Нет</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if account.show_in_expenses %}
+                                    <span class="badge bg-success">Да</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Нет</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ account.credit_limit|floatformat:2 }}</td>
+                            <td class="text-end">{{ account.account_target|floatformat:2 }}</td>
+                            <td class="text-end">{{ account.total_debt|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <button type="button"
+                                        class="btn btn-datatable btn-icon btn-transparent-dark me-2"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editAccountModal{{ account.id }}"
+                                        title="Редактировать">
+                                    <i data-feather="edit"></i>
+                                </button>
+                                <button type="button"
+                                        class="btn btn-datatable btn-icon btn-transparent-dark"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteAccountModal{{ account.id }}"
+                                        title="Удалить">
+                                    <i data-feather="trash-2"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">Счета ещё не добавлены.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="accountModal" tabindex="-1" aria-labelledby="accountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="create_account" value="1">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountModalLabel">Новый счёт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.name.id_for_label }}">Название</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="invalid-feedback d-block">{{ form.name.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.account_type.id_for_label }}">Тип счёта</label>
+                        {{ form.account_type }}
+                        {% if form.account_type.errors %}
+                        <div class="invalid-feedback d-block">{{ form.account_type.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.currency.id_for_label }}">Валюта</label>
+                        {{ form.currency }}
+                        {% if form.currency.errors %}
+                        <div class="invalid-feedback d-block">{{ form.currency.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.credit_limit.id_for_label }}">Кредитный лимит</label>
+                        {{ form.credit_limit }}
+                        {% if form.credit_limit.errors %}
+                        <div class="invalid-feedback d-block">{{ form.credit_limit.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.account_target.id_for_label }}">Целевая сумма</label>
+                        {{ form.account_target }}
+                        {% if form.account_target.errors %}
+                        <div class="invalid-feedback d-block">{{ form.account_target.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.total_debt.id_for_label }}">Текущий долг</label>
+                        {{ form.total_debt }}
+                        {% if form.total_debt.errors %}
+                        <div class="invalid-feedback d-block">{{ form.total_debt.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4 pt-2">
+                            {{ form.include_in_total }}
+                            <label class="form-check-label" for="{{ form.include_in_total.id_for_label }}">Учитывать в балансе</label>
+                            {% if form.include_in_total.errors %}
+                            <div class="invalid-feedback d-block">{{ form.include_in_total.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4 pt-2">
+                            {{ form.show_in_expenses }}
+                            <label class="form-check-label" for="{{ form.show_in_expenses.id_for_label }}">Показывать в расходах</label>
+                            {% if form.show_in_expenses.errors %}
+                            <div class="invalid-feedback d-block">{{ form.show_in_expenses.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% for account, edit_form in accounts_with_forms %}
+<!-- Edit modal -->
+<div class="modal fade" id="editAccountModal{{ account.id }}" tabindex="-1" aria-labelledby="editAccountModalLabel{{ account.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="edit_account" value="1">
+            <input type="hidden" name="account_id" value="{{ account.id }}">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editAccountModalLabel{{ account.id }}">Редактировать счёт — {{ account.name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                {% if edit_form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in edit_form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ edit_form.name.id_for_label }}">Название</label>
+                        {{ edit_form.name }}
+                        {% if edit_form.name.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.name.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ edit_form.account_type.id_for_label }}">Тип счёта</label>
+                        {{ edit_form.account_type }}
+                        {% if edit_form.account_type.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.account_type.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ edit_form.currency.id_for_label }}">Валюта</label>
+                        {{ edit_form.currency }}
+                        {% if edit_form.currency.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.currency.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ edit_form.credit_limit.id_for_label }}">Кредитный лимит</label>
+                        {{ edit_form.credit_limit }}
+                        {% if edit_form.credit_limit.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.credit_limit.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ edit_form.account_target.id_for_label }}">Целевая сумма</label>
+                        {{ edit_form.account_target }}
+                        {% if edit_form.account_target.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.account_target.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ edit_form.total_debt.id_for_label }}">Текущий долг</label>
+                        {{ edit_form.total_debt }}
+                        {% if edit_form.total_debt.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.total_debt.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4 pt-2">
+                            {{ edit_form.include_in_total }}
+                            <label class="form-check-label" for="{{ edit_form.include_in_total.id_for_label }}">Учитывать в балансе</label>
+                            {% if edit_form.include_in_total.errors %}
+                            <div class="invalid-feedback d-block">{{ edit_form.include_in_total.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4 pt-2">
+                            {{ edit_form.show_in_expenses }}
+                            <label class="form-check-label" for="{{ edit_form.show_in_expenses.id_for_label }}">Показывать в расходах</label>
+                            {% if edit_form.show_in_expenses.errors %}
+                            <div class="invalid-feedback d-block">{{ edit_form.show_in_expenses.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete modal -->
+<div class="modal fade" id="deleteAccountModal{{ account.id }}" tabindex="-1" aria-labelledby="deleteAccountModalLabel{{ account.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="delete_account" value="1">
+            <input type="hidden" name="account_id" value="{{ account.id }}">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteAccountModalLabel{{ account.id }}">Удалить счёт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить счёт <strong>{{ account.name }}</strong>? Действие можно отменить только через администратора.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-danger">Удалить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        if (window.$ && $.fn.DataTable) {
+            var tableElem = $('#accountsTable');
+            var table = tableElem.DataTable({
+                language: {
+                    search: "Поиск:",
+                    lengthMenu: "Показать _MENU_ записей",
+                    info: "Показано _START_-_END_ из _TOTAL_ записей",
+                    paginate: {
+                        first: "Первая",
+                        last: "Последняя",
+                        next: "Следующая",
+                        previous: "Предыдущая"
+                    },
+                    zeroRecords: "Совпадений не найдено",
+                    infoEmpty: "Нет записей для отображения"
+                },
+                pageLength: 10,
+                ordering: true,
+                paging: true,
+                searching: true,
+                info: true
+            });
+            tableElem.on('draw.dt', function() {
+                if (typeof feather !== 'undefined') {
+                    feather.replace();
+                }
+            });
+        }
+        if (typeof feather !== 'undefined') {
+            feather.replace();
+        }
+    });
+</script>
+{% if modal_to_open %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var modalEl = document.getElementById("{{ modal_to_open }}");
+        if (modalEl) {
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

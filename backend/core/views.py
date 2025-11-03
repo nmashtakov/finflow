@@ -1,7 +1,7 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from .forms import ProjectForm, CategoryForm, SubcategoryForm
-from core.models import Project, Category, Subcategory, ExpenseLink
+from .forms import ProjectForm, CategoryForm, SubcategoryForm, AccountForm
+from core.models import Project, Category, Subcategory, ExpenseLink, Account
 
 
 def landing_view(request):
@@ -89,3 +89,51 @@ def categories_settings(request):
         'subcategory_form': subcategory_form,
     }
     return render(request, 'categories.html', context)
+
+
+@login_required
+def accounts_directory(request):
+    user = request.user
+    accounts = Account.objects.filter(user=user, status='active').order_by('name')
+
+    form = AccountForm()
+    edit_forms = {}
+    modal_to_open = None
+
+    if request.method == "POST":
+        if 'create_account' in request.POST:
+            form = AccountForm(request.POST)
+            if form.is_valid():
+                account = form.save(commit=False)
+                account.user = user
+                account.status = 'active'
+                account.save()
+                return redirect('accounts_directory')
+            modal_to_open = 'accountModal'
+        elif 'edit_account' in request.POST:
+            account_id = request.POST.get('account_id')
+            account = get_object_or_404(Account, pk=account_id, user=user, status='active')
+            edit_form = AccountForm(request.POST, instance=account)
+            if edit_form.is_valid():
+                edit_form.save()
+                return redirect('accounts_directory')
+            edit_forms[account.id] = edit_form
+            modal_to_open = f'editAccountModal{account.id}'
+        elif 'delete_account' in request.POST:
+            account_id = request.POST.get('account_id')
+            account = get_object_or_404(Account, pk=account_id, user=user, status='active')
+            account.status = 'deleted'
+            account.save()
+            return redirect('accounts_directory')
+
+    accounts_with_forms = []
+    for account in accounts:
+        edit_form = edit_forms.get(account.id, AccountForm(instance=account))
+        accounts_with_forms.append((account, edit_form))
+
+    context = {
+        'accounts_with_forms': accounts_with_forms,
+        'form': form,
+        'modal_to_open': modal_to_open,
+    }
+    return render(request, 'accounts/account-directory.html', context)
