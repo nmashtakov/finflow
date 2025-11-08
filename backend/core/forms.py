@@ -68,3 +68,6 @@ class AccountForm(BootstrapModelForm):
         currencies = Currency.objects.filter(status='active').order_by('code')
         choices = [(c.code, f"{c.code} — {c.name}") for c in currencies]
         self.fields['currency'].choices = choices
+        if not self.is_bound and choices and 'currency' not in self.initial:
+            preferred = next((code for code, _ in choices if code == 'RUB'), choices[0][0])
+            self.initial['currency'] = preferred

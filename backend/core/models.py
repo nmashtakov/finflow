@@ -114,6 +114,8 @@ class CurrencyRate(models.Model):
 
     def __str__(self):
         return f"{self.currency} на {self.date}: {self.amount}"
+
+
 # === CURRENCY DIRECTORY ===
 class Currency(models.Model):
     STATUS_CHOICES = (
@@ -129,3 +131,24 @@ class Currency(models.Model):
 
     def __str__(self):
         return f"{self.code} — {self.name}"
+
+
+class UserPreferences(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
+    default_account = models.ForeignKey(
+        'core.Account',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='preferred_by_users'
+    )
+    default_project = models.ForeignKey(
+        'core.Project',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='preferred_by_users'
+    )
+
+    def __str__(self):
+        return f"Настройки пользователя {self.user.username}"
