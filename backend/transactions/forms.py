@@ -82,19 +82,8 @@ class TransactionImportMappingForm(forms.Form):
             required=False
         )
 
-        self.fields['column_category'] = forms.ChoiceField(label='Колонка с категорией', choices=optional_choices, required=False)
-        self.fields['default_category_name'] = forms.CharField(
-            label='Категория по умолчанию',
-            required=False,
-            help_text='Будет создана, если отсутствует.'
-        )
-
+        self.fields['column_category'] = forms.ChoiceField(label='Колонка с категорией', choices=required_choices, required=True)
         self.fields['column_subcategory'] = forms.ChoiceField(label='Колонка с подкатегорией', choices=optional_choices, required=False)
-        self.fields['default_subcategory_name'] = forms.CharField(
-            label='Подкатегория по умолчанию',
-            required=False,
-            help_text='Оставьте пустым, чтобы не использовать подкатегории.'
-        )
 
         self.fields['column_comment'] = forms.ChoiceField(label='Колонка с комментарием', choices=optional_choices, required=False)
         self.fields['default_comment'] = forms.CharField(label='Комментарий по умолчанию', required=False)
@@ -120,8 +109,8 @@ class TransactionImportMappingForm(forms.Form):
         if not cleaned.get('column_project') and not cleaned.get('default_project') and not cleaned.get('default_project_name'):
             raise forms.ValidationError('Укажите колонку с проектом или задайте проект по умолчанию.')
 
-        if not cleaned.get('column_category') and not cleaned.get('default_category_name'):
-            raise forms.ValidationError('Укажите колонку с категорией или задайте категорию по умолчанию.')
+        if not cleaned.get('column_category'):
+            raise forms.ValidationError('Укажите колонку с категорией.')
 
         return cleaned
 

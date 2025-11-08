@@ -25,8 +25,6 @@ def categories_settings(request):
     category_param = request.GET.get('category')
     if open_param and open_param.isdigit():
         open_project_id = int(open_param)
-    elif preferences.default_project_id:
-        open_project_id = preferences.default_project_id
 
     if category_param and category_param.isdigit():
         open_category_id = int(category_param)
@@ -113,8 +111,8 @@ def categories_settings(request):
         project_categories_map[project.id] = [item['category'].id for item in cat_list]
         tree.append({'project': project, 'categories': cat_list})
 
-    if open_project_id is None and tree:
-        open_project_id = tree[0]['project'].id
+    if open_project_id is None:
+        open_project_id = None
 
     if open_project_id and not open_category_id:
         category_ids = project_categories_map.get(open_project_id, [])

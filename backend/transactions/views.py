@@ -1,4 +1,5 @@
 import io
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -109,6 +110,125 @@ def _read_import_file(uploaded_file):
     }
 
 
+AUTO_COLUMN_HINTS = {
+    'column_date': ['дата', 'date', 'posting', 'operation'],
+    'column_amount': ['сумма', 'amount', 'итог', 'total', 'debit', 'credit'],
+    'column_currency': ['валют', 'currency', 'curr'],
+    'column_account': ['счет', 'счёт', 'account', 'card', 'карта', 'номер карты'],
+    'column_project': ['проект', 'project', 'client', 'контрагент', 'partner'],
+    'column_category': ['категор', 'category', 'section'],
+    'column_subcategory': ['подкат', 'subcategory', 'subcat'],
+    'column_comment': ['коммент', 'comment', 'описан', 'description', 'details', 'назначение'],
+    'column_type': ['тип', 'вид операц', 'operation type', 'доход', 'расход'],
+}
+
+KNOWN_CURRENCY_CODES = {
+    'RUB', 'USD', 'EUR', 'KZT', 'KGS', 'GBP', 'CHF', 'JPY', 'CNY', 'UAH', 'BYN', 'CAD', 'AUD', 'NOK', 'SEK',
+}
+INCOME_VALUE_MARKERS = {'доход', 'поступление', 'пополнение', 'income', 'credit', 'приход'}
+EXPENSE_VALUE_MARKERS = {'расход', 'списание', 'перевод', 'expense', 'debit', 'платеж', 'платёж'}
+
+
+def _normalize_header(value):
+    text = _normalize_string(value)
+    return re.sub(r'[^a-z0-9а-яё]+', ' ', text.lower()).strip()
+
+
+def _collect_column_samples(columns, sample_rows, limit=5):
+    samples = {}
+    for column in columns:
+        values = []
+        for row in sample_rows:
+            cell = row.get(column)
+            if cell is None:
+                continue
+            text = str(cell).strip()
+            if text:
+                values.append(text)
+            if len(values) >= limit:
+                break
+        samples[column] = values
+    return samples
+
+
+def _looks_like_numeric(values):
+    positive_hits = 0
+    for value in values:
+        text = _normalize_string(value)
+        if not text:
+            continue
+        normalized = text.replace(' ', '').replace('\xa0', '').replace(',', '.')
+        try:
+            Decimal(normalized)
+            positive_hits += 1
+        except InvalidOperation:
+            continue
+    return positive_hits >= max(1, len(values) // 2)
+
+
+def _looks_like_currency(values):
+    hits = 0
+    for value in values:
+        token = _normalize_string(value).upper()
+        if len(token) == 3 and token.isalpha():
+            if token in KNOWN_CURRENCY_CODES:
+                hits += 1
+        elif token in {'РУБ', 'ДОЛЛАР', 'ЕВРО'}:
+            hits += 1
+    return hits >= max(1, len(values) // 2)
+
+
+def _looks_like_type_markers(values):
+    hits = 0
+    for value in values:
+        token = _normalize_string(value).lower()
+        if not token:
+            continue
+        if token in INCOME_VALUE_MARKERS or token in EXPENSE_VALUE_MARKERS:
+            hits += 1
+    return hits >= max(1, len(values) // 2)
+
+
+def _auto_detect_columns(columns, sample_rows):
+    normalized_headers = {col: _normalize_header(col) for col in columns}
+    samples = _collect_column_samples(columns, sample_rows or [])
+    suggestions = {}
+    used_columns = set()
+
+    def pick(field, predicate=None):
+        hints = AUTO_COLUMN_HINTS.get(field, [])
+        for column in columns:
+            if column in used_columns:
+                continue
+            header = normalized_headers.get(column, '')
+            if any(hint in header for hint in hints):
+                if predicate and not predicate(samples.get(column, [])):
+                    continue
+                suggestions[field] = column
+                used_columns.add(column)
+                return
+        if predicate:
+            for column in columns:
+                if column in used_columns:
+                    continue
+                if predicate(samples.get(column, [])):
+                    suggestions[field] = column
+                    used_columns.add(column)
+                    return
+
+    pick('column_date')
+    pick('column_amount', _looks_like_numeric)
+    pick('column_currency', _looks_like_currency)
+    pick('column_account')
+    pick('column_project')
+    pick('column_category')
+    pick('column_subcategory')
+    pick('column_comment')
+    pick('column_type', _looks_like_type_markers)
+
+    return suggestions, samples
+
+
 def _infer_preset(columns):
     lower_cols = [col.lower() for col in columns]
     if 'дата операции' in lower_cols and 'сумма операции' in lower_cols and 'категория' in lower_cols and 'описание' in lower_cols:
@@ -158,16 +278,16 @@ def _resolve_project(user, row_value, cleaned):
     return Project.objects.create(user=user, name=name, status='active')
 
 
-def _resolve_category(user, project, row_value, cleaned):
-    name = _normalize_string(row_value) or _normalize_string(cleaned.get('default_category_name'))
+def _resolve_category(user, project, row_value):
+    name = _normalize_string(row_value)
     if not name:
         raise ImportRowError('Не удалось определить категорию')
     category, _ = Category.objects.get_or_create(user=user, name=name, defaults={'status': 'active'})
     return category
 
 
-def _resolve_subcategory(user, row_value, cleaned):
-    name = _normalize_string(row_value) or _normalize_string(cleaned.get('default_subcategory_name'))
+def _resolve_subcategory(user, row_value):
+    name = _normalize_string(row_value)
     if not name:
         return None
     subcategory, _ = Subcategory.objects.get_or_create(user=user, name=name, defaults={'status': 'active'})
@@ -252,17 +372,19 @@ def _process_rows(user, session, cleaned):
                     project = _resolve_project(user, row.get(column_project), cleaned)
                     projects_cache[proj_key or project.name.lower()] = project
 
-            category_key = (_normalize_string(row.get(column_category)) or _normalize_string(cleaned.get('default_category_name')) or '').lower()
+            category_value = row.get(column_category) if column_category else ''
+            category_key = (_normalize_string(category_value) or '').lower()
             category = categories_cache.get(category_key)
             if category is None:
-                category = _resolve_category(user, project, row.get(column_category), cleaned)
+                category = _resolve_category(user, project, category_value)
                 categories_cache[category_key or category.name.lower()] = category
 
-            sub_name = _normalize_string(row.get(column_subcategory)) or _normalize_string(cleaned.get('default_subcategory_name'))
+            sub_value = row.get(column_subcategory) if column_subcategory else ''
+            sub_name = _normalize_string(sub_value)
             sub_key = (sub_name or '').lower()
             subcategory = subcategories_cache.get(sub_key)
             if subcategory is None and sub_name:
-                subcategory = _resolve_subcategory(user, row.get(column_subcategory), cleaned)
+                subcategory = _resolve_subcategory(user, sub_value)
                 subcategories_cache[sub_key] = subcategory
             elif not sub_name:
                 subcategory = None
@@ -345,6 +467,7 @@ def transaction_import(request):
     upload_form = TransactionImportUploadForm()
     result = None
     preset_initial = {}
+    preferences, _ = UserPreferences.objects.get_or_create(user=request.user)
 
     if session_id:
         session = get_object_or_404(TransactionImportSession, pk=session_id, user=request.user)
@@ -376,6 +499,12 @@ def transaction_import(request):
                     return redirect(f"{reverse('transactions:import')}?session={session.id}")
         elif step == 'mapping' and session:
             preset_initial = BANK_PRESET_MAPPINGS.get(session.metadata.get('bank_preset', 'other'), {})
+            if preferences.default_account:
+                preset_initial.setdefault('default_account', preferences.default_account)
+                preset_initial.setdefault('default_account_name', preferences.default_account.name)
+            if preferences.default_project:
+                preset_initial.setdefault('default_project', preferences.default_project)
+                preset_initial.setdefault('default_project_name', preferences.default_project.name)
             mapping_form = TransactionImportMappingForm(
                 request.POST,
                 columns=session.columns,
@@ -416,10 +545,17 @@ def transaction_import(request):
             upload_form = TransactionImportUploadForm()
 
     if session and result is None:
+        auto_mapping, column_samples = _auto_detect_columns(session.columns, session.sample_rows)
         if not mapping_form:
             preset_initial = BANK_PRESET_MAPPINGS.get(session.metadata.get('bank_preset', 'other'), {})
             stored_mapping = session.metadata.get('last_mapping', {})
             initial_data = {'default_currency': 'RUB'}
+            if preferences.default_account:
+                initial_data.setdefault('default_account', preferences.default_account)
+                initial_data.setdefault('default_account_name', preferences.default_account.name)
+            if preferences.default_project:
+                initial_data.setdefault('default_project', preferences.default_project)
+                initial_data.setdefault('default_project_name', preferences.default_project.name)
             converted_mapping = stored_mapping.copy()
             account_id = converted_mapping.pop('default_account_id', None)
             project_id = converted_mapping.pop('default_project_id', None)
@@ -435,6 +571,8 @@ def transaction_import(request):
                     pass
             initial_data.update(preset_initial)
             initial_data.update(converted_mapping)
+            for field_name, column_name in auto_mapping.items():
+                initial_data.setdefault(field_name, column_name)
             mapping_form = TransactionImportMappingForm(
                 columns=session.columns,
                 user=request.user,
@@ -450,6 +588,8 @@ def transaction_import(request):
             'session': session,
             'sample_rows': sample_matrix,
             'columns': session.columns,
+            'auto_mapping': auto_mapping,
+            'column_samples': column_samples,
         })
 
     return render(request, 'transactions/import.html', {
@@ -492,11 +632,15 @@ def transaction_list(request):
             project_tree = _build_project_structure(user)
             accounts = Account.objects.filter(user=user, status='active').order_by('name')
             projects = Project.objects.filter(user=user, status='active').order_by('name')
+            categories = Category.objects.filter(user=user, status='active').order_by('name')
+            subcategories = Subcategory.objects.filter(user=user, status='active').order_by('name')
             context = {
                 'form': form,
                 'accounts': accounts,
                 'project_tree': project_tree,
                 'projects': projects,
+                'categories': categories,
+                'subcategories': subcategories,
                 'accounts_data': [
                     {'id': account.id, 'currency': account.currency}
                     for account in accounts
@@ -517,11 +661,16 @@ def transaction_list(request):
     accounts = Account.objects.filter(user=user, status='active').order_by('name')
     projects = Project.objects.filter(user=user, status='active').order_by('name')
 
+    categories = Category.objects.filter(user=user, status='active').order_by('name')
+    subcategories = Subcategory.objects.filter(user=user, status='active').order_by('name')
+
     context = {
         'form': form,
         'accounts': accounts,
         'project_tree': project_tree,
         'projects': projects,
+        'categories': categories,
+        'subcategories': subcategories,
         'accounts_data': [
             {'id': account.id, 'currency': account.currency}
             for account in accounts
@@ -546,6 +695,8 @@ def transaction_data(request):
     search_query = request.GET.get('search_query', '').strip()
     project_filter = request.GET.get('project', '').strip()
     account_filter = request.GET.get('account', '').strip()
+    category_filter = request.GET.get('category', '').strip()
+    subcategory_filter = request.GET.get('subcategory', '').strip()
     date_start = request.GET.get('date_start')
     date_end = request.GET.get('date_end')
 
@@ -563,6 +714,12 @@ def transaction_data(request):
         queryset = queryset.filter(expense_link__project__name=project_filter)
     if account_filter:
         queryset = queryset.filter(account__name=account_filter)
+    if category_filter:
+        queryset = queryset.filter(expense_link__category__name=category_filter)
+    if subcategory_filter == '__none':
+        queryset = queryset.filter(expense_link__subcategory__isnull=True)
+    elif subcategory_filter:
+        queryset = queryset.filter(expense_link__subcategory__name=subcategory_filter)
 
     if date_start:
         qs_start = datetime.strptime(date_start, '%Y-%m-%d')
@@ -595,14 +752,30 @@ def transaction_data(request):
 
     data = []
     for transaction in page.object_list:
+        amount_value = float(transaction.amount)
+        amount_abs = f"{abs(amount_value):,.2f}".replace(',', ' ').replace('.', ',')
+        is_income = amount_value >= 0
+        amount_display = f"<span class=\"amount-value\">{'+' if is_income else '-'}{amount_abs}</span>"
+        category_text = transaction.expense_link.category.name
+        if transaction.expense_link.subcategory:
+            subcategory_text = transaction.expense_link.subcategory.name
+        else:
+            subcategory_text = '—'
         data.append({
-            'date': transaction.date.strftime('%d.%m.%Y %H:%M'),
-            'amount': f"{transaction.amount:.2f}",
+            'date': {
+                'display': transaction.date.strftime('%d.%m.%Y %H:%M'),
+                'sort': transaction.date.timestamp(),
+            },
+            'type_raw': 'income' if is_income else 'expense',
+            'amount': {
+                'display': amount_display,
+                'sort': amount_value,
+            },
             'currency': transaction.currency,
             'account': transaction.account.name,
             'project': transaction.expense_link.project.name,
-            'category': transaction.expense_link.category.name,
-            'subcategory': transaction.expense_link.subcategory.name if transaction.expense_link.subcategory else '—',
+            'category': category_text,
+            'subcategory': subcategory_text,
             'comment': transaction.comment or '',
         })
 
