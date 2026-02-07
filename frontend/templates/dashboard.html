@@ -4,8 +4,222 @@
 {% block title %}Панель управления{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1>Панель управления</h1>
-    <p>Здесь будут аналитика и отчёты.</p>
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Сводка</h1>
+            <p class="text-muted mb-0">Быстрый взгляд на ваши финансы.</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <form method="get" class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small text-uppercase">Дата с</label>
+                    <input type="date" class="form-control" name="start" value="{{ filters.start }}">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small text-uppercase">Дата по</label>
+                    <input type="date" class="form-control" name="end" value="{{ filters.end }}">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small text-uppercase">Счёт</label>
+                    <select class="form-select" name="account">
+                        <option value="">Все счета</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if filters.account == account.id|stringformat:'s' %}selected{% endif %}>{{ account.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small text-uppercase">Проект</label>
+                    <select class="form-select" name="project">
+                        <option value="">Все проекты</option>
+                        {% for project in projects %}
+                        <option value="{{ project.id }}" {% if filters.project == project.id|stringformat:'s' %}selected{% endif %}>{{ project.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 d-flex justify-content-end gap-2">
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Сбросить</a>
+                    <button type="submit" class="btn btn-primary">Применить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <p class="text-muted text-uppercase fw-semibold small mb-1">Поступления</p>
+                    <h3 class="mb-0 text-success">{{ total_income }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <p class="text-muted text-uppercase fw-semibold small mb-1">Расходы</p>
+                    <h3 class="mb-0 text-danger">{{ total_expense }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <p class="text-muted text-uppercase fw-semibold small mb-1">Чистый итог</p>
+                    <h3 class="mb-0 {% if net_positive %}text-success{% else %}text-danger{% endif %}">{{ net_amount }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <p class="text-muted text-uppercase fw-semibold small mb-1">Операций</p>
+                    <h3 class="mb-0">{{ operation_count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">Балансы счетов</h6>
+                </div>
+                <div class="card-body">
+                    {% if account_balances %}
+                    <ul class="list-group list-group-flush">
+                        {% for account in account_balances %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-semibold">{{ account.name }}</div>
+                                <small class="text-muted">{{ account.currency }}</small>
+                            </div>
+                            <span class="fw-semibold {% if account.is_negative %}text-danger{% else %}text-success{% endif %}">
+                                {{ account.balance }}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">Пока нет данных по счетам.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">Топ расходов (месяц)</h6>
+                </div>
+                <div class="card-body">
+                    {% if top_expense_categories %}
+                    <ul class="list-group list-group-flush">
+                        {% for category in top_expense_categories %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div class="me-3 flex-grow-1">
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ category.name }}</span>
+                                    <span class="fw-semibold text-danger">-{{ category.total }}</span>
+                                </div>
+                                <div class="progress mt-2" style="height: 6px;">
+                                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ category.percent }}%;" aria-valuenow="{{ category.percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            <span class="text-muted small">{{ category.percent }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">Недостаточно данных для анализа.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">Динамика потока</h6>
+                </div>
+                <div class="card-body">
+                    {% if trend_data %}
+                    <canvas id="trendChart" height="120"></canvas>
+                    {{ trend_labels|json_script:"trend-labels" }}
+                    {{ trend_values|json_script:"trend-values" }}
+                    {% else %}
+                    <p class="text-muted mb-0">Нет операций за текущий месяц.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-FbJseb3CidRubc4QpfAlWTMwVzKhI6+w4n1vCtbmZh9rqx8uxFazc2DSES0finBm" crossorigin="anonymous"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const labelsEl = document.getElementById('trend-labels');
+        const valuesEl = document.getElementById('trend-values');
+        if (!labelsEl || !valuesEl) {
+            return;
+        }
+        const labels = JSON.parse(labelsEl.textContent || '[]');
+        const data = JSON.parse(valuesEl.textContent || '[]');
+        if (!labels.length || !window.Chart) {
+            return;
+        }
+        const ctx = document.getElementById('trendChart');
+        if (!ctx) return;
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79,70,229,0.15)',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#4f46e5',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y || 0;
+                                const sign = value >= 0 ? '+' : '-';
+                                return `${sign}${Math.abs(value).toLocaleString('ru-RU')}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('ru-RU');
+                            }
+                        },
+                        grid: { color: '#f1f5f9' }
+                    }
+                }
+            }
+        });
+    });
+</script>
 {% endblock %}

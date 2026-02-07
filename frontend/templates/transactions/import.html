@@ -1,0 +1,547 @@
+{% extends "components/base.html" %}
+
+{% block title %}Импорт транзакций{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Импорт транзакций</h1>
+    <p class="text-muted mb-4">Загрузите CSV или Excel, сопоставьте столбцы с полями FinFlow и импортируйте операции.</p>
+
+    {% if step == 'upload' %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" class="row g-3">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="upload">
+                <div class="col-12 col-md-6">
+                    {{ upload_form.file.label_tag }}
+                    {{ upload_form.file }}
+                    {% if upload_form.file.help_text %}
+                        <div class="form-text">{{ upload_form.file.help_text }}</div>
+                    {% endif %}
+                    {% if upload_form.file.errors %}
+                        <div class="invalid-feedback d-block">{{ upload_form.file.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-12 col-md-6">
+                    {{ upload_form.bank_preset.label_tag }}
+                    {{ upload_form.bank_preset }}
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Загрузить</button>
+                    <a href="{% url 'transactions:list' %}" class="btn btn-outline-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <strong>Совет:</strong> Поддерживаются выгрузки Тинькофф/Альфа. Убедитесь, что в файле есть строка заголовков.
+    </div>
+
+    {% elif step == 'sheet' %}
+    <div class="card mb-4">
+        <div class="card-header">Выберите лист Excel</div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Файл: <strong>{{ original_name }}</strong>. Укажите лист с данными для импорта.</p>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="sheet_select">
+                <div class="list-group">
+                    {% for sheet in sheet_names %}
+                    <label class="list-group-item list-group-item-action d-flex align-items-center justify-content-between sheet-option {% if forloop.first %}active{% endif %}">
+                        <span>{{ sheet }}</span>
+                        <input class="form-check-input ms-2" type="radio" name="sheet" value="{{ sheet }}" {% if forloop.first %}checked{% endif %}>
+                    </label>
+                    {% empty %}
+                    <div class="text-muted">Листы не найдены.</div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="{% url 'transactions:import' %}" class="btn btn-outline-secondary">Назад</a>
+                    <button type="submit" class="btn btn-primary">Продолжить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% elif step == 'mapping' %}
+    <div class="card mb-4">
+        <div class="card-header">Предпросмотр файла (первые 10 строк)</div>
+        <div class="card-body table-responsive">
+            <table class="table table-striped table-sm mb-0">
+                <thead>
+                    <tr>
+                        {% for column in columns %}
+                        <th>{{ column }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in sample_rows %}
+                    <tr>
+                        {% for cell in row %}
+                        <td>{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ columns|length }}" class="text-muted text-center">Нет данных для предпросмотра</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                <div class="fw-semibold">Сопоставление полей</div>
+                <small class="text-muted">Выберите, какие столбцы из файла соответствуют полям FinFlow.</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="autoDetectBtn" {% if not auto_mapping %}disabled{% endif %}>
+                    Автоподбор
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="resetMappingBtn">
+                    Сбросить
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="post" action="?session={{ session.id }}" class="mapping-form">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="mapping">
+
+                {% if mapping_form.non_field_errors %}
+                    <div class="alert alert-danger mb-4">
+                        {% for error in mapping_form.non_field_errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <div class="mapping-section mb-4">
+                    <h6 class="section-title text-uppercase text-muted fs-6 mb-3">Колонки из файла</h6>
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_date" data-required="true">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Дата операции</div>
+                                        <small class="text-muted">Обязательное поле.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_date }}
+                                </div>
+                                {% if mapping_form.column_date.errors %}
+                                <div class="invalid-feedback d-block small mt-2">{{ mapping_form.column_date.errors|striptags }}</div>
+                                {% endif %}
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_amount" data-required="true">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Сумма</div>
+                                        <small class="text-muted">Нужна для расчёта баланса.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_amount }}
+                                </div>
+                                {% if mapping_form.column_amount.errors %}
+                                <div class="invalid-feedback d-block small mt-2">{{ mapping_form.column_amount.errors|striptags }}</div>
+                                {% endif %}
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_currency">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Валюта</div>
+                                        <small class="text-muted">Если не выбрать, будет использована валюта по умолчанию.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_currency }}
+                                </div>
+                                {% if mapping_form.column_currency.errors %}
+                                <div class="invalid-feedback d-block small mt-2">{{ mapping_form.column_currency.errors|striptags }}</div>
+                                {% endif %}
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_type">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Тип операции</div>
+                                        <small class="text-muted">Определяет доход/расход по ключевым словам.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_type }}
+                                </div>
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_account">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Счёт</div>
+                                        <small class="text-muted">Укажите колонку или используйте поле «по умолчанию» ниже.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_account }}
+                                </div>
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_project">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Проект</div>
+                                        <small class="text-muted">Используется для группировки затрат.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_project }}
+                                </div>
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_category" data-required="true">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Категория</div>
+                                        <small class="text-muted">Будет создана, если отсутствует.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_category }}
+                                </div>
+                                {% if mapping_form.column_category.errors %}
+                                <div class="invalid-feedback d-block small mt-2">{{ mapping_form.column_category.errors|striptags }}</div>
+                                {% endif %}
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="mapping-card" data-mapping-field="column_subcategory">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Подкатегория</div>
+                                        <small class="text-muted">Необязательно, можно оставить пустым.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_subcategory }}
+                                </div>
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="mapping-card" data-mapping-field="column_comment">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="mapping-card__title">Комментарий</div>
+                                        <small class="text-muted">Комментарий или назначение платежа.</small>
+                                    </div>
+                                    <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
+                                </div>
+                                <div class="mt-3">
+                                    {{ mapping_form.column_comment }}
+                                </div>
+                                <div class="mapping-preview text-muted small mt-2">Примеры: <span data-mapping-preview>—</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mapping-section mb-4">
+                    <h6 class="section-title text-uppercase text-muted fs-6 mb-3">Настройки по умолчанию</h6>
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_currency.id_for_label }}">Валюта по умолчанию</label>
+                            {{ mapping_form.default_currency }}
+                            <div class="form-text">Используется, если колонка валюты не указана.</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_account.id_for_label }}">Счёт по умолчанию</label>
+                            {{ mapping_form.default_account }}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_account_name.id_for_label }}">Название счёта (создать, если не найден)</label>
+                            {{ mapping_form.default_account_name }}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_project.id_for_label }}">Проект по умолчанию</label>
+                            {{ mapping_form.default_project }}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_project_name.id_for_label }}">Название проекта (создать, если не найден)</label>
+                            {{ mapping_form.default_project_name }}
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="{{ mapping_form.default_comment.id_for_label }}">Комментарий по умолчанию</label>
+                            {{ mapping_form.default_comment }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mapping-section mb-4">
+                    <h6 class="section-title text-uppercase text-muted fs-6 mb-3">Признаки доходов и расходов</h6>
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            {{ mapping_form.income_markers.label_tag }}
+                            {{ mapping_form.income_markers }}
+                            <div class="form-text">{{ mapping_form.income_markers.help_text }}</div>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            {{ mapping_form.expense_markers.label_tag }}
+                            {{ mapping_form.expense_markers }}
+                            <div class="form-text">{{ mapping_form.expense_markers.help_text }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="{% url 'transactions:import' %}" class="btn btn-outline-secondary">Назад</a>
+                    <button type="submit" class="btn btn-primary">Импортировать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{ auto_mapping|json_script:"auto-mapping-data" }}
+    {{ column_samples|json_script:"column-samples-data" }}
+
+    {% elif step == 'result' %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h5">Импорт завершён</h2>
+            <p class="mb-3">Создано транзакций: <strong>{{ result.created }}</strong></p>
+            {% if result.errors %}
+            <div class="alert alert-warning">
+                <p class="mb-2">Некоторые строки не удалось обработать ({{ result.errors|length }}):</p>
+                <ul class="mb-0">
+                    {% for error in result.errors|slice:":10" %}
+                        <li>Строка {{ error.row }}: {{ error.message }}</li>
+                    {% endfor %}
+                </ul>
+                {% if result.errors|length > 10 %}
+                <div class="text-muted mt-2">Показаны первые 10 ошибок.</div>
+                {% endif %}
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                {% if session %}
+                <a href="{% url 'transactions:import' %}?session={{ session.id }}" class="btn btn-primary">Исправить ошибки</a>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="step" value="discard">
+                    <button type="submit" class="btn btn-outline-secondary">Пропустить ошибки</button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-3">Все строки импортированы успешно.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <a href="{% url 'transactions:list' %}" class="btn btn-primary">Вернуться к списку транзакций</a>
+    <a href="{% url 'transactions:import' %}" class="btn btn-outline-secondary ms-2">Импортировать ещё</a>
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if step == 'sheet' %}
+<style>
+    .sheet-option {
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .sheet-option.active {
+        background-color: #eef2ff;
+        border-color: #6366f1;
+        color: #1e1b4b;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const options = document.querySelectorAll('.sheet-option');
+        const activate = (option) => {
+            options.forEach(item => item.classList.remove('active'));
+            if (option) {
+                option.classList.add('active');
+            }
+        };
+        options.forEach(option => {
+            const radio = option.querySelector('input[type="radio"]');
+            if (radio.checked) {
+                activate(option);
+            }
+            radio.addEventListener('change', () => activate(option));
+            option.addEventListener('click', (event) => {
+                if (event.target.tagName !== 'INPUT') {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        });
+    });
+</script>
+{% elif step == 'mapping' %}
+<style>
+    .mapping-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem 1.2rem;
+        background: #fff;
+        min-height: 100%;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .mapping-card:hover {
+        border-color: #94a3b8;
+        box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.08);
+    }
+    .mapping-card__title {
+        font-weight: 600;
+    }
+    .mapping-card select.form-select {
+        background-color: #f8fafc;
+    }
+    .mapping-preview {
+        min-height: 1.25rem;
+    }
+    #autoDetectBtn[disabled] {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const autoDataEl = document.getElementById('auto-mapping-data');
+        const samplesEl = document.getElementById('column-samples-data');
+        if (!autoDataEl || !samplesEl) {
+            return;
+        }
+        const autoMapping = JSON.parse(autoDataEl.textContent || '{}');
+        const columnSamples = JSON.parse(samplesEl.textContent || '{}');
+        const cards = document.querySelectorAll('.mapping-card');
+
+        const badgeClasses = {
+            success: 'badge bg-success',
+            primary: 'badge bg-primary',
+            danger: 'badge bg-danger',
+            secondary: 'badge bg-light text-muted'
+        };
+
+        function formatPreview(values) {
+            if (!values || !values.length) {
+                return '—';
+            }
+            return values.slice(0, 3).join(', ');
+        }
+
+        function updateCardState(card, select) {
+            if (!select) {
+                return;
+            }
+            const field = card.dataset.mappingField;
+            const badge = card.querySelector('[data-mapping-badge]');
+            const preview = card.querySelector('[data-mapping-preview]');
+            const value = select.value;
+            if (preview) {
+                preview.textContent = formatPreview(columnSamples[value] || []);
+            }
+            if (!badge) {
+                return;
+            }
+            if (value) {
+                if (autoMapping[field] && autoMapping[field] === value) {
+                    badge.className = badgeClasses.success;
+                    badge.textContent = 'Авто';
+                } else {
+                    badge.className = badgeClasses.primary;
+                    badge.textContent = 'Выбрано';
+                }
+            } else if (card.dataset.required === 'true') {
+                badge.className = badgeClasses.danger;
+                badge.textContent = 'Нужно выбрать';
+            } else {
+                badge.className = badgeClasses.secondary;
+                badge.textContent = 'Не выбрано';
+            }
+        }
+
+        cards.forEach((card) => {
+            const select = card.querySelector('select');
+            if (!select) {
+                return;
+            }
+            select.addEventListener('change', () => updateCardState(card, select));
+            updateCardState(card, select);
+        });
+
+        const autoBtn = document.getElementById('autoDetectBtn');
+        if (autoBtn) {
+            autoBtn.addEventListener('click', () => {
+                Object.entries(autoMapping).forEach(([field, column]) => {
+                    const card = document.querySelector(`[data-mapping-field="${field}"]`);
+                    if (!card) {
+                        return;
+                    }
+                    const select = card.querySelector('select');
+                    if (!select) {
+                        return;
+                    }
+                    const hasOption = Array.from(select.options).some((option) => option.value === column);
+                    if (hasOption) {
+                        select.value = column;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            });
+        }
+
+        const resetBtn = document.getElementById('resetMappingBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                cards.forEach((card) => {
+                    const select = card.querySelector('select');
+                    if (!select) {
+                        return;
+                    }
+                    select.value = '';
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

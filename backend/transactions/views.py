@@ -1,5 +1,7 @@
 import io
+import json
 import re
+import base64
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -12,6 +14,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.views.decorators.http import require_POST
 
 from core.models import Account, Project, Category, Subcategory, ExpenseLink, Transaction, UserPreferences
 from .forms import (
@@ -78,8 +81,8 @@ def _split_markers(markers):
     return [item.strip().lower() for item in (markers or '').split(',') if item.strip()]
 
 
-def _read_import_file(uploaded_file):
-    original_name = uploaded_file.name
+def _read_import_file(uploaded_file, *, original_name=None, sheet_name=None):
+    original_name = original_name or getattr(uploaded_file, 'name', 'upload')
     filename = original_name.lower()
     try:
         if filename.endswith('.csv'):
@@ -91,7 +94,7 @@ def _read_import_file(uploaded_file):
                 buffer.seek(0)
                 df = pd.read_csv(buffer, sep=';', engine='python')
         else:
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, sheet_name=sheet_name or 0)
     except Exception as exc:
         raise ImportRowError('Не удалось прочитать файл. Убедитесь, что формат поддерживается.') from exc
 
@@ -100,8 +103,8 @@ def _read_import_file(uploaded_file):
     df = df.fillna('')
     columns = [str(col).strip() for col in df.columns]
     df.columns = columns
-    sample_rows = df.head(10).to_dict(orient='records')
-    rows = df.to_dict(orient='records')
+    sample_rows = json.loads(df.head(10).to_json(orient='records', force_ascii=False, date_format='iso'))
+    rows = json.loads(df.to_json(orient='records', force_ascii=False, date_format='iso'))
     return {
         'original_name': original_name,
         'columns': columns,
@@ -459,6 +462,43 @@ def _build_project_structure(user):
     return project_data
 
 
+def _format_transaction_row(transaction):
+    amount_value = float(transaction.amount)
+    amount_abs = f"{abs(amount_value):,.2f}".replace(',', ' ').replace('.', ',')
+    if amount_abs.endswith(',00'):
+        amount_abs = amount_abs[:-3]
+    is_income = amount_value >= 0
+    localized_date = timezone.localtime(transaction.date)
+    expense_link = transaction.expense_link
+    subcategory = expense_link.subcategory
+    return {
+        'id': transaction.id,
+        'date': {
+            'display': localized_date.strftime('%d.%m.%Y %H:%M'),
+            'sort': transaction.date.timestamp(),
+        },
+        'date_iso': localized_date.strftime('%Y-%m-%dT%H:%M'),
+        'type_raw': 'income' if is_income else 'expense',
+        'amount': {
+            'display': f"<span class=\"amount-value\">{'+' if is_income else '-'}{amount_abs}</span>",
+            'sort': amount_value,
+        },
+        'amount_raw': str(transaction.amount),
+        'currency': transaction.currency,
+        'currency_code': transaction.currency,
+        'account': transaction.account.name,
+        'account_id': transaction.account_id,
+        'project': expense_link.project.name,
+        'project_id': expense_link.project_id,
+        'category': expense_link.category.name,
+        'category_id': expense_link.category_id,
+        'subcategory': subcategory.name if subcategory else '—',
+        'subcategory_id': subcategory.id if subcategory else None,
+        'comment': transaction.comment or '',
+        'comment_raw': transaction.comment or '',
+    }
+
+
 @login_required
 def transaction_import(request):
     session_id = request.GET.get('session')
@@ -480,22 +520,82 @@ def transaction_import(request):
             if upload_form.is_valid():
                 uploaded = upload_form.cleaned_data['file']
                 preset_choice = upload_form.cleaned_data.get('bank_preset') or 'auto'
+                original_name = uploaded.name
+                data = uploaded.read()
+                preset_detected = preset_choice
+                if original_name.lower().endswith(('.xlsx', '.xls')):
+                    try:
+                        workbook = pd.ExcelFile(io.BytesIO(data))
+                        sheet_names = workbook.sheet_names
+                    except Exception as exc:
+                        upload_form.add_error('file', f'Не удалось прочитать Excel: {exc}')
+                    else:
+                        if not sheet_names:
+                            upload_form.add_error('file', 'В книге нет листов.')
+                        else:
+                            if preset_choice == 'auto':
+                                # попробуем определить по первому листу
+                                try:
+                                    preview_df = pd.read_excel(io.BytesIO(data), sheet_name=sheet_names[0])
+                                    preview_cols = [str(col).strip() for col in preview_df.columns]
+                                    preset_detected = _infer_preset(preview_cols)
+                                except Exception:
+                                    preset_detected = 'other'
+                            request.session['import_excel_pending'] = {
+                                'data': base64.b64encode(data).decode('ascii'),
+                                'original_name': original_name,
+                                'bank_preset': preset_detected,
+                            }
+                            request.session['import_excel_sheets'] = sheet_names
+                            return render(request, 'transactions/import.html', {
+                                'step': 'sheet',
+                                'sheet_names': sheet_names,
+                                'original_name': original_name,
+                            })
+                else:
+                    try:
+                        parsed = _read_import_file(io.BytesIO(data), original_name=original_name)
+                    except ImportRowError as exc:
+                        upload_form.add_error('file', str(exc))
+                    else:
+                        if preset_choice == 'auto':
+                            preset_detected = _infer_preset(parsed['columns'])
+                        session = TransactionImportSession.objects.create(
+                            user=request.user,
+                            original_name=parsed['original_name'],
+                            columns=parsed['columns'],
+                            sample_rows=parsed['sample_rows'],
+                            rows=parsed['rows'],
+                            metadata={'bank_preset': preset_detected},
+                        )
+                        return redirect(f"{reverse('transactions:import')}?session={session.id}")
+        elif step == 'sheet_select':
+            pending = request.session.get('import_excel_pending')
+            sheet_names = request.session.get('import_excel_sheets', [])
+            sheet_name = request.POST.get('sheet')
+            if not pending or sheet_name not in sheet_names:
+                upload_form = TransactionImportUploadForm()
+                request.session.pop('import_excel_pending', None)
+                request.session.pop('import_excel_sheets', None)
+                upload_form.add_error(None, 'Сессия выбора листа устарела. Загрузите файл заново.')
+            else:
+                file_bytes = base64.b64decode(pending['data'])
                 try:
-                    parsed = _read_import_file(uploaded)
+                    parsed = _read_import_file(io.BytesIO(file_bytes), original_name=pending['original_name'], sheet_name=sheet_name)
                 except ImportRowError as exc:
+                    upload_form = TransactionImportUploadForm()
                     upload_form.add_error('file', str(exc))
                 else:
-                    preset_detected = preset_choice
-                    if preset_choice == 'auto':
-                        preset_detected = _infer_preset(parsed['columns'])
                     session = TransactionImportSession.objects.create(
                         user=request.user,
-                        original_name=parsed['original_name'],
+                        original_name=f"{parsed['original_name']} — {sheet_name}",
                         columns=parsed['columns'],
                         sample_rows=parsed['sample_rows'],
                         rows=parsed['rows'],
-                        metadata={'bank_preset': preset_detected},
+                        metadata={'bank_preset': pending.get('bank_preset', 'other'), 'sheet_name': sheet_name},
                     )
+                    request.session.pop('import_excel_pending', None)
+                    request.session.pop('import_excel_sheets', None)
                     return redirect(f"{reverse('transactions:import')}?session={session.id}")
         elif step == 'mapping' and session:
             preset_initial = BANK_PRESET_MAPPINGS.get(session.metadata.get('bank_preset', 'other'), {})
@@ -675,6 +775,14 @@ def transaction_list(request):
             {'id': account.id, 'currency': account.currency}
             for account in accounts
         ],
+        'accounts_options': [
+            {'id': account.id, 'name': account.name, 'currency': account.currency}
+            for account in accounts
+        ],
+        'currency_choices': [
+            {'code': code, 'label': label}
+            for code, label in form.fields['currency'].choices
+        ],
         'initial_values': {
             'project': form['project'].value(),
             'category': form['category'].value(),
@@ -750,34 +858,7 @@ def transaction_data(request):
     page_number = start // length + 1
     page = paginator.get_page(page_number)
 
-    data = []
-    for transaction in page.object_list:
-        amount_value = float(transaction.amount)
-        amount_abs = f"{abs(amount_value):,.2f}".replace(',', ' ').replace('.', ',')
-        is_income = amount_value >= 0
-        amount_display = f"<span class=\"amount-value\">{'+' if is_income else '-'}{amount_abs}</span>"
-        category_text = transaction.expense_link.category.name
-        if transaction.expense_link.subcategory:
-            subcategory_text = transaction.expense_link.subcategory.name
-        else:
-            subcategory_text = '—'
-        data.append({
-            'date': {
-                'display': transaction.date.strftime('%d.%m.%Y %H:%M'),
-                'sort': transaction.date.timestamp(),
-            },
-            'type_raw': 'income' if is_income else 'expense',
-            'amount': {
-                'display': amount_display,
-                'sort': amount_value,
-            },
-            'currency': transaction.currency,
-            'account': transaction.account.name,
-            'project': transaction.expense_link.project.name,
-            'category': category_text,
-            'subcategory': subcategory_text,
-            'comment': transaction.comment or '',
-        })
+    data = [_format_transaction_row(transaction) for transaction in page.object_list]
 
     return JsonResponse({
         'draw': draw,
@@ -785,6 +866,118 @@ def transaction_data(request):
         'recordsFiltered': records_filtered,
         'data': data,
     })
+
+
+@login_required
+@require_POST
+def transaction_update(request, pk):
+    transaction = get_object_or_404(
+        Transaction.objects.select_related(
+            'account',
+            'expense_link__project',
+            'expense_link__category',
+            'expense_link__subcategory',
+        ),
+        pk=pk,
+        account__user=request.user,
+    )
+    try:
+        payload = json.loads((request.body or b'{}').decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'error': 'Не удалось разобрать данные'}, status=400)
+
+    errors = {}
+
+    date_value = transaction.date
+    date_str = payload.get('date')
+    if not date_str:
+        errors['date'] = 'Укажите дату'
+    else:
+        try:
+            date_value = datetime.strptime(date_str, '%Y-%m-%dT%H:%M')
+            if timezone.is_naive(date_value):
+                date_value = timezone.make_aware(date_value, timezone.get_current_timezone())
+        except ValueError:
+            errors['date'] = 'Некорректный формат даты'
+
+    amount = transaction.amount
+    amount_raw = payload.get('amount')
+    try:
+        amount = Decimal(str(amount_raw).replace(' ', '').replace(',', '.'))
+    except (InvalidOperation, TypeError, AttributeError):
+        errors['amount'] = 'Некорректная сумма'
+
+    currency = _normalize_string(payload.get('currency')) or transaction.currency
+
+    account = None
+    account_id = payload.get('account_id')
+    if account_id:
+        try:
+            account = Account.objects.get(pk=account_id, user=request.user, status='active')
+        except Account.DoesNotExist:
+            errors['account'] = 'Счёт не найден'
+    else:
+        errors['account'] = 'Укажите счёт'
+
+    project = None
+    project_id = payload.get('project_id')
+    if project_id:
+        try:
+            project = Project.objects.get(pk=project_id, user=request.user, status='active')
+        except Project.DoesNotExist:
+            errors['project'] = 'Проект не найден'
+    else:
+        errors['project'] = 'Укажите проект'
+
+    category = None
+    category_id = payload.get('category_id')
+    if category_id:
+        try:
+            category = Category.objects.get(pk=category_id, user=request.user, status='active')
+        except Category.DoesNotExist:
+            errors['category'] = 'Категория не найдена'
+    else:
+        errors['category'] = 'Укажите категорию'
+
+    subcategory = None
+    subcategory_id = payload.get('subcategory_id')
+    if subcategory_id:
+        try:
+            subcategory = Subcategory.objects.get(pk=subcategory_id, user=request.user, status='active')
+        except Subcategory.DoesNotExist:
+            errors['subcategory'] = 'Подкатегория не найдена'
+
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    expense_link = ExpenseLink.objects.filter(
+        user=request.user,
+        project=project,
+        category=category,
+        subcategory=subcategory,
+        status='active'
+    ).first()
+    if not expense_link:
+        expense_link = _ensure_expense_link(request.user, project, category, subcategory)
+
+    transaction.date = date_value
+    transaction.amount = amount
+    transaction.currency = currency or account.currency
+    transaction.account = account
+    transaction.expense_link = expense_link
+    transaction.comment = (_normalize_string(payload.get('comment')) or None)
+    transaction.transaction_type = 'income' if amount >= 0 else 'expense'
+    transaction.save()
+
+    return JsonResponse({'success': True, 'row': _format_transaction_row(transaction)})
+
+
+@login_required
+@require_POST
+def transaction_delete(request, pk):
+    transaction = get_object_or_404(Transaction, pk=pk, account__user=request.user)
+    transaction.delete()
+    return JsonResponse({'success': True})
 BANK_PRESET_MAPPINGS = {
     'tinkoff': {
         'column_date': 'Дата операции',

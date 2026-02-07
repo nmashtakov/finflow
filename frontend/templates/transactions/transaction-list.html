@@ -1,0 +1,731 @@
+{% extends "components/base.html" %}
+
+{% block title %}Транзакции{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Транзакции</h1>
+            <p class="text-muted mb-0">Добавляйте вручную или импортируйте из файлов.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" href="{% url 'transactions:import' %}">Импорт из файла</a>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#transactionModal">
+                + Добавить транзакцию
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-transparent">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Поиск</label>
+                    <input type="search" id="transactionsSearch" class="form-control" placeholder="Поиск по таблице">
+                </div>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <label class="form-label">Проект</label>
+                    <select id="filterProject" class="form-select">
+                        <option value="">Все проекты</option>
+                        {% for project in projects %}
+                        <option value="{{ project.name }}">{{ project.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <label class="form-label">Счёт</label>
+                    <select id="filterAccount" class="form-select">
+                        <option value="">Все счета</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.name }}">{{ account.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Диапазон дат</label>
+                    <div class="row gx-2 gy-2">
+                        <div class="col-6 col-sm">
+                            <input type="date" id="filterDateStart" class="form-control" aria-label="Дата от">
+                        </div>
+                        <div class="col-6 col-sm">
+                            <input type="date" id="filterDateEnd" class="form-control" aria-label="Дата до">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <label class="form-label">Категория</label>
+                    <select id="filterCategory" class="form-select">
+                        <option value="">Все категории</option>
+                        {% for category in categories %}
+                        <option value="{{ category.name }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <label class="form-label">Подкатегория</label>
+                    <select id="filterSubcategory" class="form-select">
+                        <option value="">Все подкатегории</option>
+                        {% for subcategory in subcategories %}
+                        <option value="{{ subcategory.name }}">{{ subcategory.name }}</option>
+                        {% endfor %}
+                        <option value="__none">— Без подкатегории —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="transactionsTable" class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Сумма</th>
+                            <th>Валюта</th>
+                            <th>Счёт</th>
+                            <th>Проект</th>
+                            <th>Категория</th>
+                            <th>Подкатегория</th>
+                            <th>Комментарий</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div id="transactionsFeedback" class="alert alert-info d-none mt-3" role="alert"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="transactionModal" tabindex="-1" aria-labelledby="transactionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title" id="transactionModalLabel">Новая транзакция</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    Проверьте форму — некоторые поля заполнены некорректно.
+                </div>
+                {% endif %}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.date.id_for_label }}">Дата и время</label>
+                        {{ form.date }}
+                        {% if form.date.errors %}
+                        <div class="invalid-feedback d-block">{{ form.date.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.amount.id_for_label }}">Сумма</label>
+                        {{ form.amount }}
+                        {% if form.amount.errors %}
+                        <div class="invalid-feedback d-block">{{ form.amount.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.currency.id_for_label }}">Валюта</label>
+                        {{ form.currency }}
+                        {% if form.currency.errors %}
+                        <div class="invalid-feedback d-block">{{ form.currency.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.account.id_for_label }}">Счёт</label>
+                        {{ form.account }}
+                        {% if form.account.errors %}
+                        <div class="invalid-feedback d-block">{{ form.account.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.project.id_for_label }}">Проект</label>
+                        {{ form.project }}
+                        {% if form.project.errors %}
+                        <div class="invalid-feedback d-block">{{ form.project.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.category.id_for_label }}">Категория</label>
+                        {{ form.category }}
+                        {% if form.category.errors %}
+                        <div class="invalid-feedback d-block">{{ form.category.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.subcategory.id_for_label }}">Подкатегория</label>
+                        {{ form.subcategory }}
+                        {% if form.subcategory.errors %}
+                        <div class="invalid-feedback d-block">{{ form.subcategory.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="{{ form.comment.id_for_label }}">Комментарий</label>
+                        {{ form.comment }}
+                        {% if form.comment.errors %}
+                        <div class="invalid-feedback d-block">{{ form.comment.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{ project_tree|json_script:"project-data" }}
+{{ accounts_data|json_script:"accounts-data" }}
+{{ accounts_options|json_script:"accounts-options" }}
+{{ currency_choices|json_script:"currency-options" }}
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    .transaction-income .amount-value {
+        color: #0f9d58;
+    }
+    .transaction-expense .amount-value {
+        color: #d93025;
+    }
+    .table-actions {
+        width: 80px;
+        text-align: right;
+    }
+    .table-actions .action-buttons {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.35rem;
+    }
+    .table-actions .btn-icon {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+    }
+    .table-actions .btn-icon:hover,
+    .table-actions .btn-icon:focus {
+        color: #0f172a;
+    }
+    tr.editing td {
+        background-color: #f8fafc;
+        vertical-align: middle;
+    }
+    tr.editing input,
+    tr.editing select,
+    tr.editing textarea {
+        font-size: 0.9rem;
+    }
+    .inline-edit-date {
+        width: 140px;
+        max-width: 150px;
+        display: inline-block;
+    }
+    .inline-edit-amount {
+        max-width: 110px;
+    }
+    .inline-edit-select {
+        min-width: 120px;
+        max-width: 170px;
+    }
+    .inline-edit-comment {
+        min-width: 160px;
+        width: 100%;
+    }
+    .amount-cell {
+        white-space: nowrap;
+    }
+</style>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const projectData = JSON.parse(document.getElementById('project-data').textContent || '[]');
+        const accountsData = JSON.parse(document.getElementById('accounts-data').textContent || '[]');
+        const accountOptions = JSON.parse(document.getElementById('accounts-options').textContent || '[]');
+        const currencyOptions = JSON.parse(document.getElementById('currency-options').textContent || '[]');
+        const feedbackEl = document.getElementById('transactionsFeedback');
+
+        const getCookie = (name) => {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith(name + '='));
+            return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : null;
+        };
+        const csrfToken = (document.querySelector('input[name="csrfmiddlewaretoken"]') || {}).value || getCookie('csrftoken');
+
+        const showFeedback = (message, variant = 'success') => {
+            if (!feedbackEl) return;
+            feedbackEl.textContent = message;
+            feedbackEl.className = `alert alert-${variant} mt-3`;
+            feedbackEl.classList.remove('d-none');
+            setTimeout(() => feedbackEl.classList.add('d-none'), 4000);
+        };
+
+        const projectSelect = document.getElementById('{{ form.project.id_for_label }}');
+        const categorySelect = document.getElementById('{{ form.category.id_for_label }}');
+        const subcategorySelect = document.getElementById('{{ form.subcategory.id_for_label }}');
+        const accountSelect = document.getElementById('{{ form.account.id_for_label }}');
+        const currencySelect = document.getElementById('{{ form.currency.id_for_label }}');
+        const dateStartInput = document.getElementById('filterDateStart');
+        const dateEndInput = document.getElementById('filterDateEnd');
+        const initialProject = '{{ initial_values.project|default_if_none:""|escapejs }}';
+        const initialCategory = '{{ initial_values.category|default_if_none:""|escapejs }}';
+        const initialSubcategory = '{{ initial_values.subcategory|default_if_none:""|escapejs }}';
+
+        function populateCategories(projectSelectEl, categorySelectEl, subcategorySelectEl) {
+            const projectId = projectSelectEl.value;
+            categorySelectEl.innerHTML = '';
+            subcategorySelectEl.innerHTML = '<option value="">Без подкатегории</option>';
+
+            if (!projectId) {
+                categorySelectEl.innerHTML = '<option value="">Выберите категорию</option>';
+                return;
+            }
+
+            const project = projectData.find(p => String(p.id) === String(projectId));
+            if (!project) {
+                categorySelectEl.innerHTML = '<option value="">Категории не найдены</option>';
+                return;
+            }
+
+            categorySelectEl.innerHTML = '<option value="">Выберите категорию</option>';
+            project.categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                categorySelectEl.appendChild(option);
+            });
+        }
+
+        function populateSubcategories(projectSelectEl, categorySelectEl, subcategorySelectEl) {
+            const projectId = projectSelectEl.value;
+            const categoryId = categorySelectEl.value;
+            subcategorySelectEl.innerHTML = '<option value="">Без подкатегории</option>';
+
+            if (!projectId || !categoryId) {
+                return;
+            }
+
+            const project = projectData.find(p => String(p.id) === String(projectId));
+            if (!project) {
+                return;
+            }
+
+            const category = project.categories.find(c => String(c.id) === String(categoryId));
+            if (!category) {
+                return;
+            }
+
+            category.subcategories.forEach(subcategory => {
+                const option = document.createElement('option');
+                option.value = subcategory.id;
+                option.textContent = subcategory.name;
+                subcategorySelectEl.appendChild(option);
+            });
+        }
+
+        if (accountSelect && currencySelect) {
+            const applyAccountCurrency = () => {
+                const account = accountsData.find(a => String(a.id) === String(accountSelect.value));
+                if (account) {
+                    currencySelect.value = account.currency;
+                }
+            };
+            accountSelect.addEventListener('change', applyAccountCurrency);
+            if (accountSelect.value) {
+                applyAccountCurrency();
+            } else if (!currencySelect.value) {
+                const rubOption = Array.from(currencySelect.options || []).find(option => option.value === 'RUB');
+                if (rubOption) {
+                    currencySelect.value = 'RUB';
+                }
+            }
+        }
+
+        if (projectSelect && categorySelect && subcategorySelect) {
+            projectSelect.addEventListener('change', function () {
+                populateCategories(projectSelect, categorySelect, subcategorySelect);
+            });
+            categorySelect.addEventListener('change', function () {
+                populateSubcategories(projectSelect, categorySelect, subcategorySelect);
+            });
+
+            if (initialProject) {
+                projectSelect.value = initialProject;
+            }
+            populateCategories(projectSelect, categorySelect, subcategorySelect);
+            if (initialCategory) {
+                categorySelect.value = initialCategory;
+                populateSubcategories(projectSelect, categorySelect, subcategorySelect);
+                if (initialSubcategory) {
+                    subcategorySelect.value = initialSubcategory;
+                }
+            }
+        }
+
+        const projectMap = new Map(projectData.map(project => [String(project.id), project]));
+        const accountsMap = new Map(accountOptions.map(account => [String(account.id), account]));
+
+        const escapeAttr = (value) => String(value ?? '').replace(/"/g, '&quot;');
+
+        const buildCurrencySelect = (selected) => {
+            let html = '<select class="form-select form-select-sm inline-edit-select" data-field="currency">';
+            currencyOptions.forEach(option => {
+                const isSelected = option.code === selected ? 'selected' : '';
+                html += `<option value="${option.code}" ${isSelected}>${option.label}</option>`;
+            });
+            if (selected && !currencyOptions.some(option => option.code === selected)) {
+                html += `<option value="${selected}" selected>${selected}</option>`;
+            }
+            html += '</select>';
+            return html;
+        };
+
+        const buildAccountSelect = (selected) => {
+            let html = '<select class="form-select form-select-sm inline-edit-select" data-field="account_id">';
+            accountOptions.forEach(option => {
+                const isSelected = String(option.id) === String(selected) ? 'selected' : '';
+                html += `<option value="${option.id}" ${isSelected}>${option.name}</option>`;
+            });
+            html += '</select>';
+            return html;
+        };
+
+        const buildProjectSelect = (selected) => {
+            let html = '<select class="form-select form-select-sm inline-edit-select" data-field="project_id">';
+            projectData.forEach(project => {
+                const isSelected = String(project.id) === String(selected) ? 'selected' : '';
+                html += `<option value="${project.id}" ${isSelected}>${project.name}</option>`;
+            });
+            html += '</select>';
+            return html;
+        };
+
+        const renderCategoryOptions = (projectId, selected) => {
+            const project = projectMap.get(String(projectId));
+            let html = '<option value="">— Выберите категорию —</option>';
+            if (!project) {
+                return html;
+            }
+            project.categories.forEach(category => {
+                const isSelected = String(category.id) === String(selected) ? 'selected' : '';
+                html += `<option value="${category.id}" ${isSelected}>${category.name}</option>`;
+            });
+            return html;
+        };
+
+        const renderSubcategoryOptions = (projectId, categoryId, selected) => {
+            const project = projectMap.get(String(projectId));
+            let html = '<option value="">— Без подкатегории —</option>';
+            if (!project) {
+                return html;
+            }
+            const category = project.categories.find(cat => String(cat.id) === String(categoryId));
+            if (!category) {
+                return html;
+            }
+            (category.subcategories || []).forEach(subcategory => {
+                const isSelected = String(subcategory.id) === String(selected) ? 'selected' : '';
+                html += `<option value="${subcategory.id}" ${isSelected}>${subcategory.name}</option>`;
+            });
+            return html;
+        };
+
+        const updateCategorySelectEl = (selectEl, projectId, selected) => {
+            if (!selectEl) return;
+            selectEl.innerHTML = renderCategoryOptions(projectId, selected);
+            if (selected) {
+                selectEl.value = selected;
+            }
+        };
+
+        const updateSubcategorySelectEl = (selectEl, projectId, categoryId, selected) => {
+            if (!selectEl) return;
+            selectEl.innerHTML = renderSubcategoryOptions(projectId, categoryId, selected);
+            if (selected) {
+                selectEl.value = selected;
+            }
+        };
+
+        let activeEditRow = null;
+
+        const startInlineEdit = (row) => {
+            if (!row) return;
+            if (activeEditRow && activeEditRow !== row) {
+                cancelInlineEdit(activeEditRow);
+            }
+            activeEditRow = row;
+            const data = row.data();
+            const $tr = $(row.node());
+            $tr.addClass('editing');
+            const cells = $tr.find('td');
+            const actionCell = cells.last();
+            actionCell.html(`
+                <div class="table-actions">
+                    <div class="action-buttons">
+                        <button type="button" class="btn btn-datatable btn-icon btn-success text-white btn-inline-save" title="Сохранить">
+                            <i data-feather="check"></i>
+                        </button>
+                        <button type="button" class="btn btn-datatable btn-icon btn-outline-secondary btn-inline-cancel" title="Отменить">
+                            <i data-feather="x"></i>
+                        </button>
+                    </div>
+                </div>
+            `);
+            cells.eq(0).html(`<input type="datetime-local" class="form-control form-control-sm inline-edit-date" data-field="date" value="${escapeAttr(data.date_iso || '')}">`);
+            cells.eq(1).html(`<input type="number" class="form-control form-control-sm inline-edit-amount" step="0.01" data-field="amount" value="${escapeAttr(data.amount_raw || '')}">`);
+            cells.eq(2).html(buildCurrencySelect(data.currency_code || 'RUB'));
+            cells.eq(3).html(buildAccountSelect(data.account_id));
+            cells.eq(4).html(buildProjectSelect(data.project_id));
+            cells.eq(5).html(`<select class="form-select form-select-sm inline-edit-select" data-field="category_id">${renderCategoryOptions(data.project_id, data.category_id)}</select>`);
+            cells.eq(6).html(`<select class="form-select form-select-sm inline-edit-select" data-field="subcategory_id">${renderSubcategoryOptions(data.project_id, data.category_id, data.subcategory_id)}</select>`);
+            cells.eq(7).html(`<input type="text" class="form-control form-control-sm inline-edit-comment" data-field="comment" value="${escapeAttr(data.comment_raw || '')}" placeholder="Комментарий">`);
+
+            const accountSelectEl = cells.eq(3).find('select')[0];
+            const currencySelectEl = cells.eq(2).find('select')[0];
+            if (accountSelectEl && currencySelectEl) {
+                accountSelectEl.addEventListener('change', () => {
+                    const selectedAccount = accountsMap.get(accountSelectEl.value);
+                    if (selectedAccount) {
+                        const exists = Array.from(currencySelectEl.options).some(opt => opt.value === selectedAccount.currency);
+                        if (!exists) {
+                            const opt = document.createElement('option');
+                            opt.value = selectedAccount.currency;
+                            opt.textContent = selectedAccount.currency;
+                            currencySelectEl.appendChild(opt);
+                        }
+                        currencySelectEl.value = selectedAccount.currency;
+                    }
+                });
+            }
+
+            const projectSelectEl = cells.eq(4).find('select')[0];
+            const categorySelectEl = cells.eq(5).find('select')[0];
+            const subcategorySelectEl = cells.eq(6).find('select')[0];
+
+            if (projectSelectEl && categorySelectEl) {
+                projectSelectEl.addEventListener('change', () => {
+                    updateCategorySelectEl(categorySelectEl, projectSelectEl.value, '');
+                    updateSubcategorySelectEl(subcategorySelectEl, projectSelectEl.value, categorySelectEl.value, '');
+                });
+                categorySelectEl.addEventListener('change', () => {
+                    updateSubcategorySelectEl(subcategorySelectEl, projectSelectEl.value, categorySelectEl.value, '');
+                });
+            }
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+        };
+
+        const cancelInlineEdit = (row) => {
+            if (!row) return;
+            $(row.node()).removeClass('editing');
+            row.invalidate().draw(false);
+            activeEditRow = null;
+        };
+
+        const collectRowPayload = (row) => {
+            const payload = {};
+            $(row.node()).find('[data-field]').each(function () {
+                payload[this.dataset.field] = this.value;
+            });
+            if (!payload.subcategory_id) {
+                payload.subcategory_id = null;
+            }
+            return payload;
+        };
+
+        const submitInlineEdit = (row, table) => {
+            const data = row.data();
+            const payload = collectRowPayload(row);
+            const saveBtn = $(row.node()).find('.btn-inline-save');
+            saveBtn.prop('disabled', true);
+            const url = '{% url "transactions:update" 0 %}'.replace('0', data.id);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify(payload),
+            })
+                .then(response => response.json().then(body => ({ ok: response.ok, body })))
+                .then(({ ok, body }) => {
+                    if (!ok) {
+                        const message = body.error || Object.values(body.errors || {}).join('. ') || 'Не удалось сохранить изменения';
+                        showFeedback(message, 'danger');
+                        return;
+                    }
+                    row.data(body.row);
+                    cancelInlineEdit(row);
+                    showFeedback('Транзакция обновлена', 'success');
+                })
+                .catch(() => showFeedback('Не удалось сохранить изменения', 'danger'))
+                .finally(() => saveBtn.prop('disabled', false));
+        };
+
+        const deleteRow = (row, table) => {
+            if (!row) return;
+            if (!confirm('Удалить транзакцию?')) {
+                return;
+            }
+            const url = '{% url "transactions:delete" 0 %}'.replace('0', row.data().id);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                },
+            })
+                .then(response => response.json().then(body => ({ ok: response.ok, body })))
+                .then(({ ok, body }) => {
+                    if (!ok) {
+                        const message = body.error || 'Не удалось удалить транзакцию';
+                        showFeedback(message, 'danger');
+                        return;
+                    }
+                    table.ajax.reload(null, false);
+                    showFeedback('Транзакция удалена', 'success');
+                })
+                .catch(() => showFeedback('Не удалось удалить транзакцию', 'danger'));
+        };
+
+        if (window.$ && $.fn.DataTable) {
+            const table = $('#transactionsTable').DataTable({
+                dom: '<"datatable-controls d-flex flex-wrap align-items-center justify-content-between mb-3"<"d-flex gap-2 align-items-center"l>>rt<"datatable-footer d-flex flex-wrap align-items-center justify-content-between mt-3"ip>',
+                processing: true,
+                serverSide: true,
+                pageLength: 20,
+                lengthMenu: [[10, 20, 50, 100], [10, 20, 50, 100]],
+                order: [[0, 'desc']],
+                language: {
+                    search: "Поиск:",
+                    lengthMenu: "Показать _MENU_ записей",
+                    info: "Показано _START_-_END_ из _TOTAL_ записей",
+                    paginate: {
+                        first: "Первая",
+                        last: "Последняя",
+                        next: "Следующая",
+                        previous: "Предыдущая"
+                    },
+                    zeroRecords: "Совпадений не найдено",
+                    infoEmpty: "Нет записей для отображения"
+                },
+                ajax: {
+                    url: '{% url "transactions:data" %}',
+                    data: function (d) {
+                        d.search_query = document.getElementById('transactionsSearch').value;
+                        d.project = document.getElementById('filterProject').value;
+                        d.account = document.getElementById('filterAccount').value;
+                        d.category = document.getElementById('filterCategory').value;
+                        d.subcategory = document.getElementById('filterSubcategory').value;
+                        d.date_start = dateStartInput ? dateStartInput.value : '';
+                        d.date_end = dateEndInput ? dateEndInput.value : '';
+                    }
+                },
+                columns: [
+                    { data: 'date', render: { _: 'display', sort: 'sort' } },
+                    { data: 'amount', render: { _: 'display', sort: 'sort' }, className: 'text-end amount-cell' },
+                    { data: 'currency' },
+                    { data: 'account' },
+                    { data: 'project' },
+                    { data: 'category' },
+                    { data: 'subcategory' },
+                    { data: 'comment' },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        className: 'table-actions text-end align-middle',
+                        render: function () {
+                            return `
+                                <div class="table-actions">
+                                    <div class="action-buttons">
+                                        <button type="button" class="btn btn-datatable btn-icon btn-transparent-dark btn-edit-transaction" title="Редактировать">
+                                            <i data-feather="edit-2"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-datatable btn-icon btn-transparent-dark btn-delete-transaction" title="Удалить">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    },
+                ],
+                createdRow: function (row, data) {
+                    row.classList.toggle('transaction-income', data.type_raw === 'income');
+                    row.classList.toggle('transaction-expense', data.type_raw === 'expense');
+                },
+                drawCallback: function () {
+                    if (typeof feather !== 'undefined') {
+                        feather.replace();
+                    }
+                }
+            });
+
+            let searchDebounce;
+            const reload = () => table.ajax.reload();
+            $('#filterProject').on('change', reload);
+            $('#filterAccount').on('change', reload);
+            $('#filterCategory').on('change', reload);
+            $('#filterSubcategory').on('change', reload);
+            $('#transactionsSearch').on('keyup', () => {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(reload, 300);
+            });
+            if (dateStartInput) {
+                dateStartInput.addEventListener('change', reload);
+            }
+            if (dateEndInput) {
+                dateEndInput.addEventListener('change', reload);
+            }
+
+            $('#transactionsTable tbody').on('click', '.btn-edit-transaction', function (e) {
+                e.preventDefault();
+                const row = table.row($(this).closest('tr'));
+                startInlineEdit(row);
+            });
+
+            $('#transactionsTable tbody').on('click', '.btn-inline-cancel', function (e) {
+                e.preventDefault();
+                const row = table.row($(this).closest('tr'));
+                cancelInlineEdit(row);
+            });
+
+            $('#transactionsTable tbody').on('click', '.btn-inline-save', function (e) {
+                e.preventDefault();
+                const row = table.row($(this).closest('tr'));
+                submitInlineEdit(row, table);
+            });
+
+            $('#transactionsTable tbody').on('click', '.btn-delete-transaction', function (e) {
+                e.preventDefault();
+                const row = table.row($(this).closest('tr'));
+                deleteRow(row, table);
+            });
+        }
+
+        if (typeof feather !== 'undefined') {
+            feather.replace();
+        }
+
+        {% if error_modal %}
+        var modalEl = document.getElementById('transactionModal');
+        if (modalEl) {
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+        {% endif %}
+    });
+</script>
+{% endblock %}

@@ -34,7 +34,12 @@
                     <tbody>
                         {% for account, edit_form in accounts_with_forms %}
                         <tr>
-                            <td>{{ account.name }}</td>
+                            <td>
+                                {{ account.name }}
+                                {% if default_account_id == account.id %}
+                                    <span class="badge bg-warning text-dark ms-2">По умолчанию</span>
+                                {% endif %}
+                            </td>
                             <td>{{ account.get_account_type_display }}</td>
                             <td>{{ account.currency }}</td>
                             <td>
@@ -55,6 +60,18 @@
                             <td class="text-end">{{ account.account_target|floatformat:2 }}</td>
                             <td class="text-end">{{ account.total_debt|floatformat:2 }}</td>
                             <td class="text-end">
+                                <form method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="set_default_account" value="1">
+                                    <input type="hidden" name="account_id" value="{{ account.id }}">
+                                    <button type="submit"
+                                            class="btn btn-datatable btn-icon btn-transparent-dark me-2 {% if default_account_id == account.id %}text-warning{% endif %}"
+                                            title="Сделать по умолчанию"
+                                            style="background: transparent;"
+                                            {% if default_account_id == account.id %}disabled{% endif %}>
+                                        {% if default_account_id == account.id %}<i class="fas fa-star"></i>{% else %}<i class="far fa-star"></i>{% endif %}
+                                    </button>
+                                </form>
                                 <button type="button"
                                         class="btn btn-datatable btn-icon btn-transparent-dark me-2"
                                         data-bs-toggle="modal"

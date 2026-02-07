@@ -3,190 +3,388 @@
 {% block content %}
 <div class="container py-4">
     <h2 class="mb-4">Проекты и категории</h2>
-    <!-- Кнопка "Добавить проект" -->
     <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addProjectModal">
         + Добавить проект
     </button>
 
-    <!-- Модалка для добавления проекта -->
-<div class="modal fade" id="addProjectModal" tabindex="-1" aria-labelledby="addProjectModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <form method="post">
-      {% csrf_token %}
-      <input type="hidden" name="add_project" value="1">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="addProjectModalLabel">Добавить проект</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+    <div class="modal fade" id="addProjectModal" tabindex="-1" aria-labelledby="addProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="add_project" value="1">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addProjectModalLabel">Добавить проект</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_project_name" class="form-label">Название</label>
+                            <input type="text" name="name" maxlength="100" class="form-control" required id="id_project_name" placeholder="Например, Личные финансы">
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_project_description" class="form-label">Описание</label>
+                            <textarea name="description" class="form-control" id="id_project_description" rows="3" placeholder="Краткое описание проекта (опционально)"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </div>
+                </div>
+            </form>
         </div>
-        <div class="modal-body">
-          <div class="mb-3">
-              <label for="id_name" class="form-label">Название</label>
-              <input type="text" name="name" maxlength="100" class="form-control" required id="id_name" placeholder="Например, Личные финансы">
-          </div>
-          <div class="mb-3">
-              <label for="id_description" class="form-label">Описание</label>
-              <textarea name="description" class="form-control" id="id_description" rows="3" placeholder="Краткое описание проекта (опционально)"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Добавить</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
+    </div>
 
     <div class="accordion" id="projectsAccordion">
         {% for item in tree %}
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingProject{{ item.project.id }}">
-                    <button class="accordion-button collapsed d-flex align-items-center"
-                            type="button" data-bs-toggle="collapse"
-                            data-bs-target="#collapseProject{{ item.project.id }}" aria-expanded="false"
-                            aria-controls="collapseProject{{ item.project.id }}" onmouseup="this.blur()">
-                        <span class="flex-grow-1">{{ item.project.name }}</span>
-                        <span class="d-flex align-items-center ms-2">
-                            <a class="btn btn-datatable btn-icon btn-transparent-dark me-2" href="#" title="Редактировать">
-                                <i data-feather="edit"></i>
-                            </a>
-                            <a class="btn btn-datatable btn-icon btn-transparent-dark" href="#" title="Удалить">
-                                <i data-feather="trash-2"></i>
-                            </a>
-                        </span>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingProject{{ item.project.id }}">
+                <div class="d-flex align-items-center w-100">
+                    <button class="accordion-button flex-grow-1 {% if open_project_id != item.project.id %}collapsed{% endif %}"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapseProject{{ item.project.id }}"
+                            aria-expanded="{% if open_project_id == item.project.id %}true{% else %}false{% endif %}"
+                            aria-controls="collapseProject{{ item.project.id }}"
+                            onmouseup="this.blur()">
+                        <span class="me-2">{{ item.project.name }}</span>
+                        {% if default_project_id == item.project.id %}
+                        <span class="badge bg-warning text-dark">По умолчанию</span>
+                        {% endif %}
                     </button>
-                </h2>
-                <div id="collapseProject{{ item.project.id }}" class="accordion-collapse collapse"
-                    aria-labelledby="headingProject{{ item.project.id }}" data-bs-parent="#projectsAccordion">
-                    <div class="accordion-body">
-                        <!-- Кнопка и модалка для добавления категории в проект -->
-                        <button class="btn btn-outline-success btn-sm mb-2"
+                    <div class="project-actions d-flex align-items-center ms-2 pe-2">
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="set_default_project" value="1">
+                            <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                            <button type="submit"
+                                    class="btn btn-datatable btn-icon btn-transparent-dark {% if default_project_id == item.project.id %}text-warning{% endif %}"
+                                    title="Сделать проектом по умолчанию"
+                                    {% if default_project_id == item.project.id %}disabled{% endif %}
+                                    style="background: transparent;">
+                                {% if default_project_id == item.project.id %}<i class="fas fa-star"></i>{% else %}<i class="far fa-star"></i>{% endif %}
+                            </button>
+                        </form>
+                        <button type="button"
+                                class="btn btn-datatable btn-icon btn-transparent-dark"
                                 data-bs-toggle="modal"
-                                data-bs-target="#addCategoryModal{{ item.project.id }}">
-                            + Категория
+                                data-bs-target="#editProjectModal{{ item.project.id }}"
+                                title="Редактировать">
+                            <i data-feather="edit"></i>
                         </button>
-                        <div class="modal fade" id="addCategoryModal{{ item.project.id }}" tabindex="-1"
-                            aria-labelledby="addCategoryModalLabel{{ item.project.id }}" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <form method="post">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="add_category" value="1">
-                                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="addCategoryModalLabel{{ item.project.id }}">
-                                                Добавить категорию в {{ item.project.name }}
-                                            </h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        <button type="button"
+                                class="btn btn-datatable btn-icon btn-transparent-dark"
+                                data-bs-toggle="modal"
+                                data-bs-target="#deleteProjectModal{{ item.project.id }}"
+                                title="Удалить">
+                            <i data-feather="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </h2>
+
+            <div id="collapseProject{{ item.project.id }}" class="accordion-collapse collapse{% if open_project_id == item.project.id %} show{% endif %}" aria-labelledby="headingProject{{ item.project.id }}" data-bs-parent="#projectsAccordion">
+                <div class="accordion-body">
+                    <button class="btn btn-outline-success btn-sm mb-2" data-bs-toggle="modal" data-bs-target="#addCategoryModal{{ item.project.id }}">
+                        + Категория
+                    </button>
+
+                    <div class="modal fade" id="addCategoryModal{{ item.project.id }}" tabindex="-1" aria-labelledby="addCategoryModalLabel{{ item.project.id }}" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="add_category" value="1">
+                                <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="addCategoryModalLabel{{ item.project.id }}">Добавить категорию в {{ item.project.name }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <label for="id_category_name_{{ item.project.id }}" class="form-label">Название</label>
+                                        <input type="text" name="name" maxlength="100" class="form-control" required id="id_category_name_{{ item.project.id }}" placeholder="Например, Еда">
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="submit" class="btn btn-primary">Добавить</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="accordion" id="categoriesAccordion{{ item.project.id }}">
+                        {% for c in item.categories %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingCategory{{ c.category.id }}">
+                                <div class="d-flex align-items-center w-100">
+                                    <button class="accordion-button flex-grow-1 {% if open_category_id != c.category.id %}collapsed{% endif %}"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#collapseCategory{{ c.category.id }}"
+                                            aria-expanded="{% if open_category_id == c.category.id %}true{% else %}false{% endif %}"
+                                            aria-controls="collapseCategory{{ c.category.id }}"
+                                            onmouseup="this.blur()">
+                                        <span class="flex-grow-1">{{ c.category.name }}</span>
+                                    </button>
+                                    <div class="category-actions d-flex align-items-center ms-2 pe-2">
+                                        <button type="button"
+                                                class="btn btn-datatable btn-icon btn-transparent-dark"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editCategoryModal{{ item.project.id }}_{{ c.category.id }}"
+                                                title="Редактировать">
+                                            <i data-feather="edit"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-datatable btn-icon btn-transparent-dark"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteCategoryModal{{ item.project.id }}_{{ c.category.id }}"
+                                                title="Удалить">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </h2>
+
+                            <div id="collapseCategory{{ c.category.id }}" class="accordion-collapse collapse{% if open_category_id == c.category.id %} show{% endif %}" aria-labelledby="headingCategory{{ c.category.id }}" data-bs-parent="#categoriesAccordion{{ item.project.id }}">
+                                <div class="accordion-body">
+                                    <button class="btn btn-outline-secondary btn-sm mb-2" data-bs-toggle="modal" data-bs-target="#addSubcategoryModal{{ item.project.id }}_{{ c.category.id }}">
+                                        + Подкатегория
+                                    </button>
+
+                                    <div class="modal fade" id="addSubcategoryModal{{ item.project.id }}_{{ c.category.id }}" tabindex="-1" aria-labelledby="addSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <form method="post">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="add_subcategory" value="1">
+                                                <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                                <input type="hidden" name="category_id" value="{{ c.category.id }}">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="addSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}">Добавить подкатегорию в {{ c.category.name }}</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <label for="id_subcategory_name_{{ item.project.id }}_{{ c.category.id }}" class="form-label">Название</label>
+                                                        <input type="text" name="name" maxlength="100" class="form-control" required id="id_subcategory_name_{{ item.project.id }}_{{ c.category.id }}" placeholder="Например, Кафе">
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="submit" class="btn btn-primary">Добавить</button>
+                                                    </div>
+                                                </div>
+                                            </form>
                                         </div>
-                                        <div class="modal-body">
-                                            <div class="mb-3">
-                                                <label for="id_category_name_{{ item.project.id }}" class="form-label">Название</label>
-                                                <input type="text" name="name" maxlength="100" class="form-control" required id="id_category_name_{{ item.project.id }}" placeholder="Например, Еда">
+                                    </div>
+
+                                    <ul class="list-group mb-2">
+                                        {% for subcategory in c.subcategories %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span>{{ subcategory.name }}</span>
+                                            <div class="d-flex gap-1">
+                                                <button type="button"
+                                                        class="btn btn-datatable btn-icon btn-transparent-dark"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#editSubcategoryModal{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}"
+                                                        title="Редактировать">
+                                                    <i data-feather="edit"></i>
+                                                </button>
+                                                <button type="button"
+                                                        class="btn btn-datatable btn-icon btn-transparent-dark"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#deleteSubcategoryModal{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}"
+                                                        title="Удалить">
+                                                    <i data-feather="trash-2"></i>
+                                                </button>
                                             </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="submit" class="btn btn-primary">Добавить</button>
-                                        </div>
+                                        </li>
+                                        {% empty %}
+                                        <li class="list-group-item text-muted">Нет подкатегорий</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal fade" id="editCategoryModal{{ item.project.id }}_{{ c.category.id }}" tabindex="-1" aria-labelledby="editCategoryModalLabel{{ item.project.id }}_{{ c.category.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <form method="post" class="modal-content">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="edit_category" value="1">
+                                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                    <input type="hidden" name="category_id" value="{{ c.category.id }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="editCategoryModalLabel{{ item.project.id }}_{{ c.category.id }}">Редактировать категорию</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <label for="id_edit_category_name_{{ item.project.id }}_{{ c.category.id }}" class="form-label">Название</label>
+                                        <input type="text" name="name" maxlength="100" class="form-control" required id="id_edit_category_name_{{ item.project.id }}_{{ c.category.id }}" value="{{ c.category.name }}">
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                                        <button type="submit" class="btn btn-primary">Сохранить</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
 
-                        <div class="accordion" id="categoriesAccordion{{ item.project.id }}">
-                            {% for c in item.categories %}
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header" id="headingCategory{{ c.category.id }}">
-                                        <button class="accordion-button collapsed d-flex align-items-center"
-                                                type="button" data-bs-toggle="collapse"
-                                                data-bs-target="#collapseCategory{{ c.category.id }}"
-                                                aria-expanded="false" aria-controls="collapseCategory{{ c.category.id }}" onmouseup="this.blur()">
-                                            <span class="flex-grow-1">{{ c.category.name }}</span>
-                                            <span class="d-flex align-items-center ms-2">
-                                                <a class="btn btn-datatable btn-icon btn-transparent-dark me-2" href="#" title="Редактировать">
-                                                    <i data-feather="edit"></i>
-                                                </a>
-                                                <a class="btn btn-datatable btn-icon btn-transparent-dark" href="#" title="Удалить">
-                                                    <i data-feather="trash-2"></i>
-                                                </a>
-                                            </span>
-                                        </button>
-                                    </h2>
-                                    <div id="collapseCategory{{ c.category.id }}" class="accordion-collapse collapse"
-                                        aria-labelledby="headingCategory{{ c.category.id }}" data-bs-parent="#categoriesAccordion{{ item.project.id }}">
-                                        <div class="accordion-body">
-                                            <!-- Кнопка и модалка для добавления подкатегории в категорию -->
-                                            <button class="btn btn-outline-secondary btn-sm mb-2"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#addSubcategoryModal{{ item.project.id }}_{{ c.category.id }}">
-                                                + Подкатегория
-                                            </button>
-                                            <div class="modal fade" id="addSubcategoryModal{{ item.project.id }}_{{ c.category.id }}" tabindex="-1"
-                                                aria-labelledby="addSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}" aria-hidden="true">
-                                                <div class="modal-dialog">
-                                                    <form method="post">
-                                                        {% csrf_token %}
-                                                        <input type="hidden" name="add_subcategory" value="1">
-                                                        <input type="hidden" name="project_id" value="{{ item.project.id }}">
-                                                        <input type="hidden" name="category_id" value="{{ c.category.id }}">
-                                                        <div class="modal-content">
-                                                            <div class="modal-header">
-                                                                <h5 class="modal-title" id="addSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}">
-                                                                    Добавить подкатегорию в {{ c.category.name }}
-                                                                </h5>
-                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-                                                            </div>
-                                                            <div class="modal-body">
-                                                                <div class="mb-3">
-                                                                    <label for="id_subcategory_name_{{ item.project.id }}_{{ c.category.id }}" class="form-label">Название</label>
-                                                                    <input type="text" name="name" maxlength="100" class="form-control" required id="id_subcategory_name_{{ item.project.id }}_{{ c.category.id }}" placeholder="Например, Кафе">
-                                                                </div>
-                                                            </div>
-                                                            <div class="modal-footer">
-                                                                <button type="submit" class="btn btn-primary">Добавить</button>
-                                                            </div>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-
-                                            <ul class="list-group mb-2">
-                                                {% for subcategory in c.subcategories %}
-                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                        {{ subcategory.name }}
-                                                        <span class="d-flex align-items-center">
-                                                            <a class="btn btn-datatable btn-icon btn-transparent-dark me-2" href="#" title="Редактировать">
-                                                                <i data-feather="edit"></i>
-                                                            </a>
-                                                            <a class="btn btn-datatable btn-icon btn-transparent-dark" href="#" title="Удалить">
-                                                                <i data-feather="trash-2"></i>
-                                                            </a>
-                                                        </span>
-                                                    </li>
-                                                {% empty %}
-                                                    <li class="list-group-item text-muted">Нет подкатегорий</li>
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
+                        <div class="modal fade" id="deleteCategoryModal{{ item.project.id }}_{{ c.category.id }}" tabindex="-1" aria-labelledby="deleteCategoryModalLabel{{ item.project.id }}_{{ c.category.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <form method="post" class="modal-content">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="delete_category" value="1">
+                                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                    <input type="hidden" name="category_id" value="{{ c.category.id }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="deleteCategoryModalLabel{{ item.project.id }}_{{ c.category.id }}">Удалить категорию</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                                     </div>
-                                </div>
-                            {% empty %}
-                                <div class="text-muted ms-2">Нет категорий</div>
-                            {% endfor %}
+                                    <div class="modal-body">
+                                        Удалить категорию <strong>{{ c.category.name }}</strong> из проекта <strong>{{ item.project.name }}</strong>?
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                                        <button type="submit" class="btn btn-danger">Удалить</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
+
+                        {% for subcategory in c.subcategories %}
+                        <div class="modal fade" id="editSubcategoryModal{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" tabindex="-1" aria-labelledby="editSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <form method="post" class="modal-content">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="edit_subcategory" value="1">
+                                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                    <input type="hidden" name="category_id" value="{{ c.category.id }}">
+                                    <input type="hidden" name="subcategory_id" value="{{ subcategory.id }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="editSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}">Редактировать подкатегорию</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <label for="id_edit_subcategory_name_{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" class="form-label">Название</label>
+                                        <input type="text" name="name" maxlength="100" class="form-control" required id="id_edit_subcategory_name_{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" value="{{ subcategory.name }}">
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="modal fade" id="deleteSubcategoryModal{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" tabindex="-1" aria-labelledby="deleteSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <form method="post" class="modal-content">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="delete_subcategory" value="1">
+                                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                                    <input type="hidden" name="category_id" value="{{ c.category.id }}">
+                                    <input type="hidden" name="subcategory_id" value="{{ subcategory.id }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="deleteSubcategoryModalLabel{{ item.project.id }}_{{ c.category.id }}_{{ subcategory.id }}">Удалить подкатегорию</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        Удалить подкатегорию <strong>{{ subcategory.name }}</strong>?
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                                        <button type="submit" class="btn btn-danger">Удалить</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% empty %}
+                        <div class="text-muted ms-2">Нет категорий</div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="modal fade" id="editProjectModal{{ item.project.id }}" tabindex="-1" aria-labelledby="editProjectModalLabel{{ item.project.id }}" aria-hidden="true">
+            <div class="modal-dialog">
+                <form method="post" class="modal-content">
+                    {% csrf_token %}
+                    <input type="hidden" name="edit_project" value="1">
+                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editProjectModalLabel{{ item.project.id }}">Редактировать проект</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_edit_project_name_{{ item.project.id }}" class="form-label">Название</label>
+                            <input type="text" name="name" maxlength="100" class="form-control" required id="id_edit_project_name_{{ item.project.id }}" value="{{ item.project.name }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_edit_project_description_{{ item.project.id }}" class="form-label">Описание</label>
+                            <textarea name="description" class="form-control" id="id_edit_project_description_{{ item.project.id }}" rows="3">{{ item.project.description }}</textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="modal fade" id="deleteProjectModal{{ item.project.id }}" tabindex="-1" aria-labelledby="deleteProjectModalLabel{{ item.project.id }}" aria-hidden="true">
+            <div class="modal-dialog">
+                <form method="post" class="modal-content">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_project" value="1">
+                    <input type="hidden" name="project_id" value="{{ item.project.id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteProjectModalLabel{{ item.project.id }}">Удалить проект</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                    </div>
+                    <div class="modal-body">
+                        Удалить проект <strong>{{ item.project.name }}</strong>? Все его связи категорий будут скрыты.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-danger">Удалить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         {% empty %}
-            <div class="text-muted ms-2">Нет проектов</div>
+        <div class="text-muted ms-2">Нет проектов</div>
         {% endfor %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<style>
+    #projectsAccordion .project-actions,
+    #projectsAccordion .category-actions {
+        background: var(--bs-accordion-btn-bg);
+        border-left: 1px solid rgba(0, 0, 0, 0.05);
+        border-top-right-radius: var(--bs-accordion-border-radius);
+        border-bottom-right-radius: var(--bs-accordion-border-radius);
+        padding: 0.25rem 0.5rem;
+    }
+
+    #projectsAccordion .accordion-button:not(.collapsed) + .project-actions,
+    #projectsAccordion .accordion-button:not(.collapsed) + .category-actions {
+        background: var(--bs-accordion-active-bg);
+    }
+
+    #projectsAccordion .project-actions .btn,
+    #projectsAccordion .category-actions .btn {
+        padding: 0.25rem;
+    }
+</style>
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         if (typeof feather !== 'undefined') {
             feather.replace();
         }
