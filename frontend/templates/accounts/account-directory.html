@@ -17,12 +17,13 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="accountsTable" class="table table-striped">
+                <table id="accountsTable" class="table table-sm table-striped align-middle">
                     <thead>
                         <tr>
                             <th>Название</th>
                             <th>Тип</th>
                             <th>Валюта</th>
+                            <th>Статус</th>
                             <th>В балансе</th>
                             <th>В расходах</th>
                             <th class="text-end">Кредитный лимит</th>
@@ -33,7 +34,7 @@
                     </thead>
                     <tbody>
                         {% for account, edit_form in accounts_with_forms %}
-                        <tr>
+                        <tr {% if account.status != 'active' %}class="text-muted"{% endif %}>
                             <td>
                                 {{ account.name }}
                                 {% if default_account_id == account.id %}
@@ -42,6 +43,13 @@
                             </td>
                             <td>{{ account.get_account_type_display }}</td>
                             <td>{{ account.currency }}</td>
+                            <td>
+                                {% if account.status == 'active' %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% elif account.status == 'archived' %}
+                                    <span class="badge bg-secondary">В архиве</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if account.include_in_total %}
                                     <span class="badge bg-success">Да</span>
@@ -68,7 +76,7 @@
                                             class="btn btn-datatable btn-icon btn-transparent-dark me-2 {% if default_account_id == account.id %}text-warning{% endif %}"
                                             title="Сделать по умолчанию"
                                             style="background: transparent;"
-                                            {% if default_account_id == account.id %}disabled{% endif %}>
+                                            {% if default_account_id == account.id or account.status != 'active' %}disabled{% endif %}>
                                         {% if default_account_id == account.id %}<i class="fas fa-star"></i>{% else %}<i class="far fa-star"></i>{% endif %}
                                     </button>
                                 </form>
@@ -90,13 +98,221 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">Счета ещё не добавлены.</td>
+                            <td colspan="10" class="text-center text-muted py-4">Счета ещё не добавлены.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                    <h4 class="mb-1">Сверка балансов</h4>
+                    <p class="text-muted mb-0">Заполни текущие остатки по активным счетам. Если фактический баланс отличается от расчётного, значит по счёту не хватает операций или есть ошибка.</p>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="toggleBalanceHistory">
+                    История фиксаций
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Счёт</th>
+                            <th>Последняя фиксация</th>
+                            <th>Последняя операция</th>
+                            <th>Расчётный баланс сейчас</th>
+                            <th>Что проверить</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in balance_summary %}
+                        <tr>
+                            <td>{{ row.account.name }}</td>
+                            <td>
+                                {% if row.latest_snapshot %}
+                                    <div>{{ row.latest_snapshot.snapshot_date|date:"d.m.Y" }}</div>
+                                    <div class="text-muted">{{ row.latest_snapshot.balance|floatformat:2 }} {{ row.account.currency }}</div>
+                                {% else %}
+                                    <span class="text-muted">Нет фиксации</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.last_transaction_at %}
+                                    {{ row.last_transaction_at|date:"d.m.Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Нет операций</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.expected_now is not None %}
+                                    {{ row.expected_now|floatformat:2 }} {{ row.account.currency }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not row.latest_snapshot %}
+                                    <span class="badge bg-warning text-dark">Нужна первая фиксация</span>
+                                {% elif row.has_check_difference %}
+                                    <span class="{% if row.check_amount > 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ row.check_amount|floatformat:2 }} {{ row.account.currency }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-success">Сверено</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-2">
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm open-balance-snapshot-modal"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#balanceSnapshotModal"
+                                            data-account-id="{{ row.account.id }}"
+                                            data-account-name="{{ row.account.name }}"
+                                            data-snapshot-id=""
+                                            data-snapshot-date=""
+                                            data-snapshot-balance=""
+                                            data-snapshot-note="">
+                                        Зафиксировать баланс
+                                    </button>
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="copy_balance_snapshot" value="1">
+                                        <input type="hidden" name="account_id" value="{{ row.account.id }}">
+                                        <button type="submit"
+                                                class="btn btn-outline-secondary btn-sm"
+                                                {% if not row.latest_snapshot or row.has_today_snapshot %}disabled{% endif %}>
+                                            Не поменялся
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">Счета ещё не добавлены.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-none mt-4" id="balanceHistoryCollapse">
+    <div class="card">
+        <div class="card-body">
+            <h4 class="mb-3">История фиксаций</h4>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Счёт</th>
+                            <th class="text-end">Баланс</th>
+                            <th>Комментарий</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for snapshot in balance_history %}
+                        <tr>
+                            <td>{{ snapshot.snapshot_date|date:"d.m.Y" }}</td>
+                            <td>{{ snapshot.account.name }}</td>
+                            <td class="text-end">{{ snapshot.balance|floatformat:2 }} {{ snapshot.account.currency }}</td>
+                            <td>{{ snapshot.note|default:"—" }}</td>
+                            <td class="text-end">
+                                <button type="button"
+                                        class="btn btn-datatable btn-icon btn-transparent-dark open-balance-snapshot-modal"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#balanceSnapshotModal"
+                                        data-account-id="{{ snapshot.account.id }}"
+                                        data-account-name="{{ snapshot.account.name }}"
+                                        data-snapshot-id="{{ snapshot.id }}"
+                                        data-snapshot-date="{{ snapshot.snapshot_date|date:'Y-m-d' }}"
+                                        data-snapshot-balance="{{ snapshot.balance }}"
+                                        data-snapshot-note="{{ snapshot.note }}"
+                                        title="Редактировать фиксацию">
+                                    <i data-feather="edit"></i>
+                                </button>
+                                <form method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="delete_balance_snapshot" value="1">
+                                    <input type="hidden" name="snapshot_id" value="{{ snapshot.id }}">
+                                    <button type="submit" class="btn btn-datatable btn-icon btn-transparent-dark" title="Удалить фиксацию">
+                                        <i data-feather="trash-2"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">Фиксаций баланса пока нет.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<div class="modal fade" id="balanceSnapshotModal" tabindex="-1" aria-labelledby="balanceSnapshotModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content">
+            {% csrf_token %}
+            <input type="hidden" name="save_balance_snapshot" value="1">
+            <input type="hidden" name="account_id" id="balanceSnapshotAccountId" value="{{ snapshot_modal_account_id|default:'' }}">
+            <input type="hidden" name="snapshot_id" id="balanceSnapshotId" value="{{ snapshot_modal_id|default:'' }}">
+            <div class="modal-header">
+                <h5 class="modal-title" id="balanceSnapshotModalLabel">Фиксация баланса</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 text-muted">
+                    Счёт: <strong id="balanceSnapshotAccountName">{{ snapshot_modal_account_name|default:'—' }}</strong>
+                </div>
+                {% if balance_form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in balance_form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ balance_form.snapshot_date.id_for_label }}">Дата баланса</label>
+                    {{ balance_form.snapshot_date }}
+                    {% if balance_form.snapshot_date.errors %}
+                    <div class="invalid-feedback d-block">{{ balance_form.snapshot_date.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ balance_form.balance.id_for_label }}">Баланс на конец дня</label>
+                    {{ balance_form.balance }}
+                    {% if balance_form.balance.errors %}
+                    <div class="invalid-feedback d-block">{{ balance_form.balance.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-0">
+                    <label class="form-label" for="{{ balance_form.note.id_for_label }}">Комментарий</label>
+                    {{ balance_form.note }}
+                    {% if balance_form.note.errors %}
+                    <div class="invalid-feedback d-block">{{ balance_form.note.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить баланс</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -138,6 +354,13 @@
                         {{ form.currency }}
                         {% if form.currency.errors %}
                         <div class="invalid-feedback d-block">{{ form.currency.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ form.status.id_for_label }}">Статус</label>
+                        {{ form.status }}
+                        {% if form.status.errors %}
+                        <div class="invalid-feedback d-block">{{ form.status.errors|striptags }}</div>
                         {% endif %}
                     </div>
                     <div class="col-md-4">
@@ -232,6 +455,13 @@
                         {% endif %}
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label" for="{{ edit_form.status.id_for_label }}">Статус</label>
+                        {{ edit_form.status }}
+                        {% if edit_form.status.errors %}
+                        <div class="invalid-feedback d-block">{{ edit_form.status.errors|striptags }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label" for="{{ edit_form.credit_limit.id_for_label }}">Кредитный лимит</label>
                         {{ edit_form.credit_limit }}
                         {% if edit_form.credit_limit.errors %}
@@ -307,6 +537,53 @@
 {% block extra_js %}
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        const snapshotButtons = document.querySelectorAll('.open-balance-snapshot-modal');
+        const snapshotAccountId = document.getElementById('balanceSnapshotAccountId');
+        const snapshotId = document.getElementById('balanceSnapshotId');
+        const snapshotAccountName = document.getElementById('balanceSnapshotAccountName');
+        const snapshotDate = document.getElementById('id_snapshot_date');
+        const snapshotBalance = document.getElementById('id_balance');
+        const snapshotNote = document.getElementById('id_note');
+        const snapshotModalTitle = document.getElementById('balanceSnapshotModalLabel');
+        const defaultSnapshotDate = snapshotDate ? snapshotDate.value : '';
+
+        snapshotButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                if (snapshotAccountId) {
+                    snapshotAccountId.value = button.dataset.accountId || '';
+                }
+                if (snapshotId) {
+                    snapshotId.value = button.dataset.snapshotId || '';
+                }
+                if (snapshotAccountName) {
+                    snapshotAccountName.textContent = button.dataset.accountName || '—';
+                }
+                if (snapshotDate) {
+                    snapshotDate.value = button.dataset.snapshotDate || defaultSnapshotDate;
+                }
+                if (snapshotBalance) {
+                    snapshotBalance.value = button.dataset.snapshotBalance || '';
+                }
+                if (snapshotNote) {
+                    snapshotNote.value = button.dataset.snapshotNote || '';
+                }
+                if (snapshotModalTitle) {
+                    snapshotModalTitle.textContent = button.dataset.snapshotId ? 'Редактировать фиксацию' : 'Фиксация баланса';
+                }
+            });
+        });
+
+        const historyToggle = document.getElementById('toggleBalanceHistory');
+        const historyBlock = document.getElementById('balanceHistoryCollapse');
+        if (historyToggle && historyBlock) {
+            historyToggle.addEventListener('click', function() {
+                historyBlock.classList.toggle('d-none');
+                historyToggle.textContent = historyBlock.classList.contains('d-none')
+                    ? 'История фиксаций'
+                    : 'Скрыть историю';
+            });
+        }
+
         if (window.$ && $.fn.DataTable) {
             var tableElem = $('#accountsTable');
             var table = tableElem.DataTable({

@@ -1,0 +1,1811 @@
+{% extends "components/base.html" %}
+
+{% block title %}Прогноз{% endblock %}
+
+{% block extra_css %}
+<style>
+    .forecast-page {
+        background: #f6f8fb;
+        min-height: calc(100vh - 60px);
+        padding-bottom: 2rem;
+    }
+    .forecast-hero {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        padding: 1.1rem 1.25rem;
+    }
+    .forecast-eyebrow {
+        color: #0f766e;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
+    .forecast-card {
+        background: #ffffff;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+    .forecast-metric {
+        min-height: 132px;
+        padding: 1.1rem;
+    }
+    .metric-label {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
+    .metric-value {
+        color: #111827;
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+    }
+    .metric-note {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    .accent-teal {
+        border-top: 4px solid #0f766e;
+    }
+    .accent-blue {
+        border-top: 4px solid #2563eb;
+    }
+    .accent-amber {
+        border-top: 4px solid #f59e0b;
+    }
+    .accent-red {
+        border-top: 4px solid #dc2626;
+    }
+    .chart-box {
+        position: relative;
+        height: 360px;
+    }
+    .chart-box-small {
+        position: relative;
+        height: 300px;
+    }
+    .chart-box-technical {
+        position: relative;
+        height: 260px;
+    }
+    .insight-list {
+        display: grid;
+        gap: 0.75rem;
+    }
+    .insight-item {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 0.8rem 0.9rem;
+    }
+    .insight-item-bad {
+        border-left: 4px solid #dc2626;
+        background: #fef2f2;
+    }
+    .insight-item-good {
+        border-left: 4px solid #0f766e;
+        background: #ecfdf5;
+    }
+    .insight-item-neutral {
+        border-left: 4px solid #64748b;
+        background: #f8fafc;
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 8px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .status-badge-regular {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .status-badge-risk {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+    .anomaly-cell {
+        min-height: 40px;
+        min-width: 56px;
+        border-radius: 4px;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.2rem 0.3rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.1;
+        text-align: center;
+        color: #ffffff;
+    }
+    .anomaly-cell-normal {
+        background: #f1f5f9;
+        color: #475569;
+    }
+    .anomaly-cell-growth {
+        background: #dc2626;
+        border-color: #b91c1c;
+    }
+    .anomaly-cell-decrease {
+        background: #2563eb;
+        border-color: #1d4ed8;
+    }
+    .table-fixed-first th:first-child,
+    .table-fixed-first td:first-child {
+        min-width: 150px;
+    }
+    .profile-scroll {
+        max-height: 520px;
+        overflow: auto;
+    }
+    .threshold-value {
+        min-width: 42px;
+        text-align: right;
+        font-weight: 700;
+    }
+    .source-pill {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #475569;
+        display: inline-flex;
+        padding: 0.35rem 0.55rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+    }
+    .forecast-actions {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        gap: 0.6rem;
+    }
+    .forecast-actions .btn {
+        white-space: nowrap;
+    }
+    .category-chart-scroll {
+        max-height: 340px;
+        overflow-y: auto;
+        padding-right: 0.25rem;
+    }
+    .category-chart-inner {
+        min-height: 300px;
+        position: relative;
+    }
+    .clickable-row {
+        cursor: pointer;
+    }
+    .clickable-row:hover td {
+        background: #f8fafc;
+    }
+    .amount-expense {
+        color: #dc2626;
+        white-space: nowrap;
+    }
+    .info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border: 1px solid #cbd5e1;
+        border-radius: 50%;
+        color: #64748b;
+        background: #f8fafc;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1;
+        cursor: help;
+    }
+    .technical-list {
+        display: grid;
+        gap: 0.5rem;
+        margin: 0;
+        padding-left: 1.1rem;
+    }
+    .technical-table th {
+        color: #64748b;
+        font-weight: 700;
+        width: 34%;
+    }
+    .technical-toggle {
+        color: #2563eb;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .technical-toggle:hover {
+        color: #1d4ed8;
+    }
+    .budget-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .budget-summary-note {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    .budget-status {
+        color: #64748b;
+        font-size: 0.88rem;
+    }
+    .budget-status-error {
+        color: #dc2626;
+    }
+    .budget-table input {
+        min-width: 132px;
+        text-align: right;
+    }
+    .budget-table .form-control[disabled] {
+        background: #f8fafc;
+        color: #475569;
+        border-color: #e2e8f0;
+        opacity: 1;
+    }
+    .budget-input {
+        border-radius: 8px;
+        font-weight: 700;
+    }
+    .budget-input-summary {
+        font-size: 1.35rem;
+        padding: 0.45rem 0.6rem;
+        text-align: left !important;
+    }
+    .budget-inline {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.35rem;
+    }
+    .budget-inline-summary {
+        justify-content: space-between;
+    }
+    .budget-inline-value {
+        color: #111827;
+        font-weight: 800;
+        line-height: 1.15;
+    }
+    .budget-inline-summary .budget-inline-value {
+        font-size: 1.65rem;
+        flex: 1;
+        text-align: left;
+    }
+    .budget-inline-input {
+        width: 100%;
+        max-width: 180px;
+    }
+    .budget-inline-trigger {
+        border: 0;
+        background: transparent;
+        color: #475569;
+        padding: 0.15rem;
+        line-height: 1;
+    }
+    .budget-inline-trigger:hover {
+        color: #111827;
+    }
+    .budget-inline-trigger .feather {
+        width: 14px;
+        height: 14px;
+    }
+    .budget-progress {
+        position: relative;
+        min-width: 122px;
+        max-width: 132px;
+        margin-left: auto;
+        height: 28px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #f5f7fb;
+    }
+    .budget-progress-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        border-radius: 999px;
+    }
+    .budget-progress-good {
+        background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+    }
+    .budget-progress-bad {
+        background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+    }
+    .budget-progress-neutral {
+        background: linear-gradient(90deg, #94a3b8 0%, #cbd5e1 100%);
+    }
+    .budget-progress-label {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 0.4rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .budget-hidden {
+        display: none;
+    }
+    .budget-total-row th,
+    .budget-total-row td {
+        background: #f8fafc;
+        font-weight: 700;
+    }
+    @media (max-width: 768px) {
+        .forecast-actions {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="forecast-page">
+    <div class="container-fluid px-4">
+        <div class="forecast-hero mt-4 mb-4">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-xl-7">
+                    <div class="forecast-eyebrow mb-2">Месячный финансовый отчет</div>
+                    <h1 class="mb-2">Прогноз и итоги месяца</h1>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <span class="source-pill">{{ report.source_label|default:"Данные системы" }}</span>
+                        {% if source == 'system' %}
+                        <span class="text-muted small">Проект: {{ selected_project_name }}</span>
+                        {% endif %}
+                        <span class="text-muted small">Детализация: по {{ report.dimension_label|default:"категориям" }}</span>
+                    </div>
+                </div>
+                <div class="col-12 col-xl-5">
+                    <div class="forecast-actions">
+                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#systemSourceModal">Данные системы</button>
+                        <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#fileSourceModal">Загрузка файла</button>
+                        {% if has_uploaded_file %}
+                        <a class="btn btn-outline-secondary" href="?clear_file=1">Очистить файл</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="systemSourceModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <form method="get" id="forecastFilterForm">
+                        <input type="hidden" name="source" value="system">
+                        <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title">Данные системы</h5>
+                                <div class="small text-muted">Прогноз считается по существующим транзакциям и выбранному проекту.</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Проект</label>
+                                    <select class="form-select" name="project">
+                                        {% for project in projects %}
+                                        <option value="{{ project.id }}" {% if project.id|stringformat:'s' == selected_project_id %}selected{% endif %}>{{ project.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Месяц</label>
+                                    <select class="form-select" name="month">
+                                        {% for month in system_available_months %}
+                                        <option value="{{ month.value }}" {% if month.value == selected_month_value %}selected{% endif %}>{{ month.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Валюта</label>
+                                    <select class="form-select" name="report_currency">
+                                        {% for currency in currencies %}
+                                        <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>{{ currency.code }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Детализация нижних таблиц</label>
+                                    <select class="form-select" name="dimension">
+                                        <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
+                                        <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Применить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="fileSourceModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">Загрузка файла</h5>
+                            <div class="small text-muted">Файл используется только для расчета прогноза и не попадает в транзакции системы.</div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        {% if file_upload_error %}
+                        <div class="alert alert-danger">{{ file_upload_error }}</div>
+                        {% endif %}
+                        {% if file_upload_notice %}
+                        <div class="alert alert-success">{{ file_upload_notice }}</div>
+                        {% endif %}
+                        {% if file_preview_range %}
+                        <div class="alert alert-light border">Период в файле: {{ file_preview_range }}</div>
+                        {% elif file_rows_range %}
+                        <div class="alert alert-light border">Период в файле: {{ file_rows_range }}</div>
+                        {% endif %}
+                        <form method="post" enctype="multipart/form-data" class="mb-4">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="upload_file">
+                            <input type="hidden" name="source" value="file">
+                            <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <label class="form-label fw-semibold">1. Выберите CSV/XLSX</label>
+                            <div class="input-group">
+                                <input class="form-control" type="file" name="forecast_file" accept=".csv,.xlsx,.xls" required>
+                                <button class="btn btn-outline-primary" type="submit">Загрузить</button>
+                            </div>
+                        </form>
+
+                        {% if file_preview.columns %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="map_file">
+                            <input type="hidden" name="source" value="file">
+                            <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                            <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <div class="fw-semibold mb-3">2. Сопоставьте столбцы</div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Дата</label>
+                                    <select class="form-select" name="date_column" required>
+                                        <option value="">Не выбрано</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.date %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Сумма</label>
+                                    <select class="form-select" name="amount_column" required>
+                                        <option value="">Не выбрано</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.amount %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Тип операции</label>
+                                    <select class="form-select" name="type_column">
+                                        <option value="">Не использовать</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.type %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Валюта</label>
+                                    <select class="form-select" name="currency_column">
+                                        <option value="">RUB по умолчанию</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.currency %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Категория или назначение</label>
+                                    <select class="form-select" name="category_column">
+                                        <option value="">Без категории</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.category %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Комментарий</label>
+                                    <select class="form-select" name="comment_column">
+                                        <option value="">Не использовать</option>
+                                        {% for column in file_preview.columns %}
+                                        <option value="{{ column }}" {% if column == file_column_guesses.comment %}selected{% endif %}>{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Детализация нижних таблиц</label>
+                                    <select class="form-select" name="dimension">
+                                        <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
+                                        <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end mt-4">
+                                <button class="btn btn-primary" type="submit">Рассчитать по файлу</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        {% if has_uploaded_file %}
+                        <form method="get" class="border-top pt-4">
+                            <input type="hidden" name="source" value="file">
+                            <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                            <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <div class="fw-semibold mb-3">Параметры загруженного файла</div>
+                            {% if file_rows_range %}
+                            <div class="text-muted small mb-3">Период в файле: {{ file_rows_range }}</div>
+                            {% endif %}
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Месяц</label>
+                                    <select class="form-select" name="month">
+                                        {% for month in file_available_months %}
+                                        <option value="{{ month.value }}" {% if month.value == selected_month_value %}selected{% endif %}>{{ month.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Валюта</label>
+                                    <select class="form-select" name="report_currency">
+                                        {% for currency in currencies %}
+                                        <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>{{ currency.code }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Детализация</label>
+                                    <select class="form-select" name="dimension">
+                                        <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
+                                        <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end mt-4">
+                                <button class="btn btn-primary" type="submit">Рассчитать</button>
+                            </div>
+                            <div class="form-text mt-2">Файл хранится в текущей сессии браузера, пока вы не нажмете «Очистить файл» или не завершится session.</div>
+                        </form>
+                        {% else %}
+                            <div class="text-muted small">Файл хранится только в текущей сессии браузера: до нажатия «Очистить файл», выхода из системы или истечения session.</div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if report.has_data %}
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+            <div>
+                <h2 class="h4 mb-1">{{ report.selected_month_label }}</h2>
+                <div class="text-muted">Прогноз строится методом скользящего среднего за {{ report.settings.forecast_window }} месяцев.</div>
+            </div>
+            <div class="text-muted small">
+                WAPE на истории: {{ report.summary.wape }} · точек сравнения: {{ report.metrics.points }}
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="forecast-card forecast-metric accent-teal">
+                    <div class="metric-label mb-2">Расходы месяца</div>
+                    <div class="metric-value">{{ report.summary.expense }} {{ report.report_currency }}</div>
+                    <div class="metric-note mt-2">К прошлому месяцу: {{ report.summary.previous_delta }} {{ report.report_currency }} / {{ report.summary.previous_delta_pct }}</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="forecast-card forecast-metric accent-blue">
+                    <div class="metric-label mb-2">Прогноз на {{ report.next_month_label }}</div>
+                    <div class="metric-value">{{ report.summary.forecast_next }} {{ report.report_currency }}</div>
+                    <div class="metric-note mt-2">Основной ориентир расхода на следующий месяц.</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="forecast-card forecast-metric accent-amber">
+                    <div class="metric-label mb-2">Рисковая часть</div>
+                    <div class="metric-value">{{ report.summary.risk_next }} {{ report.report_currency }}</div>
+                    <div class="metric-note mt-2">Доля риска в выбранном месяце: {{ report.summary.risk_share }}</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="forecast-card forecast-metric accent-red">
+                    <div class="metric-label mb-2">Разница месяца</div>
+                    <div class="metric-value">{{ report.summary.balance }} {{ report.report_currency }}</div>
+                    <div class="metric-note mt-2">Доходы минус расходы. Доходы: {{ report.summary.income }} {{ report.report_currency }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-12 col-xl-8">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent">
+                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                            Факт и прогноз общего расхода
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Линия факта показывает месячные расходы. Прогноз строится скользящим средним за {{ report.settings.forecast_window }} месяцев; последняя точка — ориентир на следующий месяц.">?</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-box">
+                            <canvas id="forecastTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-xl-4">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent">
+                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                            Главные выводы
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Автоматические текстовые выводы по выбранному месяцу: изменение к прошлому месяцу, отклонение от среднего, доля рисковой части, аномалии и прогноз следующего месяца.">?</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="insight-list">
+                            {% for insight in report.insights %}
+                            <div class="insight-item insight-item-{{ insight.tone }}">{{ insight.text }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-12 col-xl-6">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent">
+                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                            Регулярная и рисковая часть: факт и прогноз
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Категория считается регулярной при достаточной активности и низком коэффициенте вариации. Остальные расходы относятся к рисковой части. Столбцы — факт, линии — прогноз.">?</span>
+                        </h6>
+                        <div class="small text-muted mt-1">Столбцы показывают факт, линии — прогнозную динамику.</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-box-small">
+                            <canvas id="forecastStructureChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-xl-6">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent">
+                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                            Крупнейшие категории месяца
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Показывает расходы выбранного месяца по категориям и сравнивает их со средним за предыдущую историю до 12 месяцев. Процент справа: красный — рост расходов, зеленый — снижение.">?</span>
+                        </h6>
+                        <div class="small text-muted mt-1">Текущий месяц сравнивается со средним за последние 12 месяцев, либо за доступную историю.</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="category-chart-scroll">
+                            <div class="category-chart-inner" id="forecastCategoryChartWrap">
+                                <canvas id="forecastCategoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-12 col-xl-7">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent d-flex flex-column flex-lg-row justify-content-between gap-2">
+                        <div>
+                            <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                                Профиль расходов
+                                <span class="info-icon" data-bs-toggle="tooltip" title="Таблица показывает тип категории, сумму в выбранном месяце, долю активных месяцев и CV. CV — отношение стандартного отклонения к среднему расходу категории.">?</span>
+                            </h6>
+                            <span class="text-muted small">Регулярность: активность ≥ {{ report.settings.regular_min_active_share }}, CV ≤ {{ report.settings.regular_max_cv }}</span>
+                        </div>
+                        <select class="form-select form-select-sm" id="dimensionQuickSelect" style="max-width: 220px;">
+                            <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
+                            <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
+                        </select>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive profile-scroll">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>{% if selected_dimension == 'subcategory' %}Категория / подкатегория{% else %}Категория{% endif %}</th>
+                                        <th>Тип</th>
+                                        <th class="text-end">Месяц</th>
+                                        <th class="text-end">Активность</th>
+                                        <th class="text-end">CV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in report.profiles %}
+                                    <tr>
+                                        <td>{{ row.category }}</td>
+                                        <td>
+                                            <span class="status-badge {% if row.expense_type == 'regular' %}status-badge-regular{% else %}status-badge-risk{% endif %}">
+                                                {{ row.expense_type_label }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end">{{ row.current }} {{ report.report_currency }}</td>
+                                        <td class="text-end">{{ row.active_share }}</td>
+                                        <td class="text-end">{{ row.coefficient_variation }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-xl-5">
+                <div class="forecast-card h-100">
+                    <div class="card-header bg-transparent d-flex justify-content-between align-items-center gap-2">
+                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                            Аномалии выбранного месяца
+                            <span class="info-icon" data-bs-toggle="tooltip" title="В таблицу попадают категории, где расход выбранного месяца отличается от предыдущей истории сильнее заданного порога z-score. Рост расходов помечается как риск, снижение — как положительное отклонение.">?</span>
+                        </h6>
+                        <div class="small text-muted text-nowrap">Порог: <span id="selectedAnomalyThreshold">{{ report.settings.anomaly_threshold }}</span></div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive {% if not report.anomalies %}d-none{% endif %}" id="selectedAnomalyTableWrap">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Категория</th>
+                                        <th>Тип</th>
+                                        <th class="text-end">Факт</th>
+                                        <th class="text-end">Среднее</th>
+                                        <th class="text-end">z-score</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="selectedAnomalyBody">
+                                    {% for anomaly in report.anomalies %}
+                                    <tr class="clickable-row js-anomaly-summary-row" data-key="{{ anomaly.key }}" data-title="{{ anomaly.category }}" data-z="{{ anomaly.z_score }}" data-status="{{ anomaly.type_label }}" data-amount="{{ anomaly.amount }}" data-expected="{{ anomaly.expected }}">
+                                        <td>{{ anomaly.category }}</td>
+                                        <td>
+                                            <span class="status-badge {% if anomaly.type == 'growth' %}status-badge-risk{% else %}status-badge-regular{% endif %}">
+                                                {{ anomaly.type_label }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end">{{ anomaly.amount }} {{ report.report_currency }}</td>
+                                        <td class="text-end">{{ anomaly.expected }} {{ report.report_currency }}</td>
+                                        <td class="text-end">{{ anomaly.z_score }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted mb-0 {% if report.anomalies %}d-none{% endif %}" id="selectedAnomalyEmpty">Аномалий по выбранному порогу не найдено.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="forecast-card">
+            <div class="card-header bg-transparent d-flex flex-column flex-lg-row justify-content-between gap-3">
+                <div>
+                    <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                        Карта аномалий за последние месяцы
+                        <span class="info-icon" data-bs-toggle="tooltip" title="Одна ячейка — категория в конкретном месяце. Цвет появляется, если z-score месяца вышел за порог: красный — расход выше обычного, синий — ниже обычного.">?</span>
+                    </h6>
+                    <div class="text-muted small mt-1">Красный цвет — рост, синий — снижение. Нажмите на ячейку, чтобы увидеть операции.</div>
+                </div>
+                <div style="min-width: 280px;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="text-muted small mb-0 d-inline-flex align-items-center gap-2" for="anomalyThresholdRange">
+                            Порог аномалии
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Порог сравнивается с модулем z-score: z = (расход месяца - средний расход категории) / стандартное отклонение. Значение 1 окрашивает месяцы вне диапазона ±1 стандартного отклонения, поэтому не все ячейки обязаны быть цветными. Значение 0 окрашивает все ячейки карты.">?</span>
+                        </label>
+                        <span class="threshold-value" id="anomalyThresholdValue">{{ report.settings.anomaly_threshold }}</span>
+                    </div>
+                    <input class="form-range" id="anomalyThresholdRange" form="forecastFilterForm" type="range" name="threshold" min="0" max="4" step="0.1" value="{{ selected_threshold }}">
+                </div>
+            </div>
+            <div class="card-body">
+                {% if report.anomaly_grid.rows %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle table-fixed-first mb-0">
+                        <thead>
+                            <tr>
+                                <th>Категория</th>
+                                {% for month in report.anomaly_grid.months %}
+                                <th class="text-center">{{ month }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in report.anomaly_grid.rows %}
+                            <tr>
+                                <td class="fw-semibold">{{ row.category }}</td>
+                                {% for cell in row.cells %}
+                                <td class="text-center">
+                                    <div class="anomaly-cell anomaly-cell-{{ cell.type }} js-anomaly-cell" data-key="{{ cell.key }}" data-z="{{ cell.z_score_value }}" data-z-display="{{ cell.z_score }}" data-title="{{ cell.title }}" data-status="{% if cell.type == 'growth' %}Рост{% elif cell.type == 'decrease' %}Снижение{% else %}Норма{% endif %}" data-amount="{{ cell.value }}" data-expected="{{ cell.expected }}" title="{{ cell.title }}: {{ cell.value }} {{ report.report_currency }}, среднее {{ cell.expected }} {{ report.report_currency }}, z-score {{ cell.z_score }}">{{ cell.short_value }}</div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">За последние месяцы нет категорий с отклонениями по выбранному порогу.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if source == 'system' and report.budget %}
+        <div class="forecast-card mt-4">
+            <div class="card-header bg-transparent">
+                <div class="budget-toolbar">
+                    <div>
+                        <h6 class="mb-1 d-inline-flex align-items-center gap-2">
+                            Бюджетирование на {{ report.budget.plan_month_label }}
+                            <span class="info-icon" data-bs-toggle="tooltip" title="Блок использует анализ выбранного месяца и автоматически раскладывает прогноз следующего месяца по категориям. Рекомендации можно отредактировать и сохранить как план.">?</span>
+                        </h6>
+                        <div class="budget-summary-note">
+                            Анализируется {{ report.selected_month_label }}, план фиксируется на {{ report.budget.plan_month_label }}.
+                            {% if report.budget.has_saved_plan %}
+                            <span id="budgetSavedAtLabel">Последнее сохранение: {{ report.budget.saved_at }}.</span>
+                            {% endif %}
+                        </div>
+                        <div class="budget-status mt-1" id="budgetSaveStatus"></div>
+                    </div>
+                    <form method="get" class="d-flex flex-wrap align-items-end gap-2">
+                        <input type="hidden" name="source" value="system">
+                        <input type="hidden" name="project" value="{{ selected_project_id }}">
+                        <input type="hidden" name="month" value="{{ selected_month_value }}">
+                        <input type="hidden" name="report_currency" value="{{ selected_currency }}">
+                        <input type="hidden" name="dimension" value="{{ selected_dimension }}">
+                        <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                        <div>
+                            <label class="form-label form-label-sm mb-1">Окно среднего</label>
+                            <select class="form-select form-select-sm" name="budget_window">
+                                {% for option in report.budget.window_choices %}
+                                <option value="{{ option }}" {% if option == report.budget.distribution_window %}selected{% endif %}>{{ option }} мес.</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" type="submit">Обновить</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if budget_error %}
+                <div class="alert alert-danger">{{ budget_error }}</div>
+                {% endif %}
+                {% if budget_notice %}
+                <div class="alert alert-success">{{ budget_notice }}</div>
+                {% endif %}
+                <form method="post" id="budgetPlanForm" data-editable="{% if report.budget.has_saved_plan %}0{% else %}1{% endif %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_budget_plan">
+                    <input type="hidden" name="source" value="system">
+                    <input type="hidden" name="project" value="{{ selected_project_id }}">
+                    <input type="hidden" name="month" value="{{ selected_month_value }}">
+                    <input type="hidden" name="report_currency" value="{{ selected_currency }}">
+                    <input type="hidden" name="dimension" value="{{ selected_dimension }}">
+                    <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                    <input type="hidden" name="budget_window" value="{{ report.budget.distribution_window }}">
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="forecast-card forecast-metric accent-blue">
+                            <div class="metric-label mb-2">Прогноз дохода</div>
+                            <div class="budget-inline budget-inline-summary js-budget-inline" data-summary="1">
+                                <div class="budget-inline-value js-budget-inline-value">{{ report.budget.summary.forecast_income }} {{ report.report_currency }}</div>
+                                <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать прогноз дохода">
+                                    <i data-feather="edit-2"></i>
+                                </button>
+                                <input class="form-control budget-input budget-input-summary js-budget-income-input js-budget-inline-input budget-hidden" type="number" name="budget_forecast_income" min="0" step="1" value="{{ report.budget.summary.forecast_income|cut:' ' }}">
+                            </div>
+                            <div class="metric-note mt-2">Авто: {{ report.budget.summary.forecast_income_auto }} {{ report.report_currency }} · скользящее среднее за {{ report.settings.forecast_window }} месяцев.</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="forecast-card forecast-metric accent-teal">
+                            <div class="metric-label mb-2">Прогноз расхода</div>
+                            <div class="metric-value">{{ report.budget.summary.forecast_expense }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">Регулярная часть: {{ report.budget.summary.forecast_regular }} · рисковая: {{ report.budget.summary.forecast_risk }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="forecast-card forecast-metric accent-amber">
+                            <div class="metric-label mb-2">План расхода</div>
+                            <div class="metric-value" id="budgetPlannedTotal">{{ report.budget.summary.planned_total }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">Рекомендовано: {{ report.budget.summary.suggested_total }} {{ report.report_currency }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="forecast-card forecast-metric accent-red">
+                            <div class="metric-label mb-2">Остаток</div>
+                            <div class="metric-value" id="budgetPlannedBalance">{{ report.budget.summary.planned_balance }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">Прогноз дохода минус план расходов.</div>
+                        </div>
+                    </div>
+                </div>
+                    <div class="table-responsive budget-table">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Категория</th>
+                                    <th>Тип</th>
+                                    <th class="text-end">План {{ report.selected_month_label }}</th>
+                                    <th class="text-end">Факт {{ report.selected_month_label }}</th>
+                                    <th class="text-end">Отклонение</th>
+                                    <th class="text-end">Среднее за {{ report.budget.distribution_window }} мес.</th>
+                                    <th class="text-end">Доля</th>
+                                    <th class="text-end">Рекомендовано</th>
+                                    <th class="text-end">План</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for line in report.budget.lines %}
+                                <tr>
+                                    <td>
+                                        {{ line.category }}
+                                        <input type="hidden" name="budget_category" value="{{ line.category }}">
+                                        <input type="hidden" name="budget_expense_type" value="{{ line.expense_type }}">
+                                        <input type="hidden" name="budget_avg_amount" value="{{ line.avg_input }}">
+                                        <input type="hidden" name="budget_share_pct" value="{{ line.share_input }}">
+                                        <input type="hidden" name="budget_suggested_amount" value="{{ line.suggested_input }}">
+                                    </td>
+                                    <td>
+                                        <span class="status-badge {% if line.expense_type == 'regular' %}status-badge-regular{% else %}status-badge-risk{% endif %}">
+                                            {{ line.expense_type_label }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">{{ line.current_plan }} {% if line.current_plan != '—' %}{{ report.report_currency }}{% endif %}</td>
+                                    <td class="text-end">{{ line.current }} {{ report.report_currency }}</td>
+                                    <td class="text-end">
+                                        {% if line.current_plan_raw is not None %}
+                                        <div class="budget-progress">
+                                            <div class="budget-progress-bar budget-progress-{{ line.current_plan_delta_tone }}" style="width: {{ line.current_plan_delta_ratio }}%;"></div>
+                                            <div class="budget-progress-label">{{ line.current_plan_delta }} {{ report.report_currency }}</div>
+                                        </div>
+                                        {% else %}
+                                        —
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ line.avg }} {{ report.report_currency }}</td>
+                                    <td class="text-end">{{ line.share }}</td>
+                                    <td class="text-end">{{ line.suggested }} {{ report.report_currency }}</td>
+                                    <td class="text-end">
+                                        <div class="budget-inline js-budget-inline">
+                                            <div class="budget-inline-value js-budget-inline-value">{{ line.planned_display }} {{ report.report_currency }}</div>
+                                            <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать сумму категории">
+                                                <i data-feather="edit-2"></i>
+                                            </button>
+                                            <input class="form-control form-control-sm budget-input js-budget-plan-input js-budget-inline-input budget-hidden" type="number" name="budget_planned_amount" min="0" step="1" value="{{ line.planned_input }}">
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="budget-total-row">
+                                    <th colspan="7">Итого</th>
+                                    <th class="text-end">{{ report.budget.summary.suggested_total }} {{ report.report_currency }}</th>
+                                    <th class="text-end" id="budgetPlanTableTotal">{{ report.budget.summary.planned_total }} {{ report.report_currency }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        <div class="forecast-card mt-4">
+            <div class="card-header bg-transparent d-flex flex-column flex-lg-row justify-content-between gap-2 align-items-lg-center">
+                <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                    Техническая информация расчета
+                    <span class="info-icon" data-bs-toggle="tooltip" title="Служебный блок фиксирует параметры расчета, правила отбора операций, метрики качества и помесячную ошибку прогноза.">?</span>
+                </h6>
+                <button class="btn btn-sm btn-link technical-toggle p-0" type="button" data-bs-toggle="collapse" data-bs-target="#forecastTechnicalDetails" aria-expanded="false" aria-controls="forecastTechnicalDetails">
+                    Показать детали
+                </button>
+            </div>
+            <div class="collapse" id="forecastTechnicalDetails">
+                <div class="card-body border-top">
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-5">
+                            <table class="table table-sm technical-table mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th>Источник</th>
+                                        <td>{{ report.source_label }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Период анализа</th>
+                                        <td>{{ report.period_label }} · {{ report.settings.history_months }} мес.</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Месяц отчета</th>
+                                        <td>{{ report.selected_month_label }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Валюта</th>
+                                        <td>{{ report.report_currency }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Детализация</th>
+                                        <td>По {{ report.dimension_label }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>WAPE</th>
+                                        <td>{{ report.summary.wape }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>MAPE</th>
+                                        <td>{{ report.metrics.mape }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>MAE</th>
+                                        <td>{{ report.metrics.mae }} {{ report.report_currency }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Точек сравнения</th>
+                                        <td>{{ report.metrics.points }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-12 col-lg-7">
+                            <ul class="technical-list">
+                                <li>Прогноз общего расхода: скользящее среднее за {{ report.settings.forecast_window }} последних месяцев.</li>
+                                <li>Регулярная часть: активность категории не ниже {{ report.settings.regular_min_active_share }}, CV не выше {{ report.settings.regular_max_cv }}, минимальная история — {{ report.settings.regular_min_history_months }} мес.</li>
+                                <li>Рисковая часть: все категории, которые не прошли условия регулярности.</li>
+                                <li>Аномалии: z-score считается по предыдущим {{ report.settings.anomaly_history_window }} месяцам категории; минимум истории — {{ report.settings.anomaly_min_history_months }} мес.</li>
+                                <li>Окраска карты: красный при z-score ≥ порога, синий при z-score ≤ -порога, серый — значение в пределах нормы.</li>
+                                <li>Перед расчетом исключаются переводы и долги; валюты приводятся к выбранной валюте отчета; возвратные операции не считаются самостоятельным доходом.</li>
+                            </ul>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-inline-flex align-items-center gap-2 mb-2">
+                                <span class="fw-semibold">Помесячная ошибка прогноза</span>
+                                <span class="info-icon" data-bs-toggle="tooltip" title="Столбцы показывают абсолютную ошибку прогноза в валюте отчета, линия — относительную ошибку APE в процентах.">?</span>
+                            </div>
+                            <div class="chart-box-technical">
+                                <canvas id="forecastErrorChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{ report.chart_payload|json_script:"forecast-chart-payload" }}
+        {{ report.anomaly_transactions|json_script:"forecast-anomaly-transactions" }}
+        {{ report.anomaly_candidates|json_script:"forecast-anomaly-candidates" }}
+        <div class="modal fade" id="anomalyTransactionsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title mb-1">Операции в ячейке</h5>
+                            <div class="small text-muted" id="anomalyTransactionsTitle">—</div>
+                            <div class="small text-muted" id="anomalyTransactionsMeta">—</div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Дата</th>
+                                        <th>Категория</th>
+                                        <th>Подкатегория</th>
+                                        <th>Комментарий</th>
+                                        <th>Счет</th>
+                                        <th class="text-end">Сумма</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="anomalyTransactionsBody"></tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted mb-0 d-none" id="anomalyTransactionsEmpty">Операций в этой ячейке нет.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="forecast-card">
+            <div class="card-body">
+                <h2 class="h5">Нет данных для прогноза</h2>
+                <p class="text-muted mb-0">Добавьте транзакции, чтобы сформировать месячный отчет.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if report.has_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.bootstrap) {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+                window.bootstrap.Tooltip.getOrCreateInstance(element, { container: 'body' });
+            });
+        }
+        if (typeof feather !== 'undefined') {
+            feather.replace();
+        }
+        const payloadEl = document.getElementById('forecast-chart-payload');
+        const hasCharts = Boolean(payloadEl && window.Chart);
+        const payload = payloadEl ? JSON.parse(payloadEl.textContent || '{}') : {};
+        const anomalyTransactionsEl = document.getElementById('forecast-anomaly-transactions');
+        const anomalyTransactions = anomalyTransactionsEl ? JSON.parse(anomalyTransactionsEl.textContent || '{}') : {};
+        const anomalyCandidatesEl = document.getElementById('forecast-anomaly-candidates');
+        const anomalyCandidates = anomalyCandidatesEl ? JSON.parse(anomalyCandidatesEl.textContent || '[]') : [];
+        const currency = '{{ report.report_currency|escapejs }}';
+        const numberFormatter = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+        const money = (value) => `${numberFormatter.format(value || 0)} ${currency}`;
+        const thresholdRange = document.getElementById('anomalyThresholdRange');
+        const thresholdValue = document.getElementById('anomalyThresholdValue');
+        const filterForm = document.getElementById('forecastFilterForm');
+        const technicalDetails = document.getElementById('forecastTechnicalDetails');
+        const technicalToggle = document.querySelector('[data-bs-target="#forecastTechnicalDetails"]');
+        const budgetPlanForm = document.getElementById('budgetPlanForm');
+        const budgetPlanInputs = Array.from(document.querySelectorAll('.js-budget-plan-input'));
+        const budgetIncomeInput = document.querySelector('.js-budget-income-input');
+        const budgetPlannedTotalEl = document.getElementById('budgetPlannedTotal');
+        const budgetPlannedBalanceEl = document.getElementById('budgetPlannedBalance');
+        const budgetPlanTableTotalEl = document.getElementById('budgetPlanTableTotal');
+        const budgetSaveStatusEl = document.getElementById('budgetSaveStatus');
+        const budgetSavedAtLabelEl = document.getElementById('budgetSavedAtLabel');
+        let budgetSavePromise = null;
+        let errorChart = null;
+        const categoryDeltaPlugin = {
+            id: 'categoryDeltaPlugin',
+            afterDatasetsDraw(chart) {
+                const meta = chart.getDatasetMeta(0);
+                const labels = payload.top_category_avg_delta_pct_labels || [];
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.font = '12px sans-serif';
+                ctx.textBaseline = 'middle';
+                meta.data.forEach((bar, index) => {
+                    const text = labels[index] || '';
+                    if (!text) return;
+                    ctx.fillStyle = deltaTextColor(text);
+                    ctx.fillText(text, bar.x + 8, bar.y);
+                });
+                ctx.restore();
+            }
+        };
+
+        if (thresholdRange && thresholdValue) {
+            thresholdRange.addEventListener('input', function () {
+                thresholdValue.textContent = thresholdRange.value.replace('.', ',');
+                applyAnomalyThreshold(Number(thresholdRange.value));
+                renderSelectedAnomalies(Number(thresholdRange.value));
+            });
+        }
+        if (technicalDetails && technicalToggle) {
+            technicalDetails.addEventListener('shown.bs.collapse', function () {
+                technicalToggle.textContent = 'Скрыть детали';
+                renderErrorChart();
+            });
+            technicalDetails.addEventListener('hidden.bs.collapse', function () {
+                technicalToggle.textContent = 'Показать детали';
+            });
+        }
+        const dimensionQuickSelect = document.getElementById('dimensionQuickSelect');
+        if (dimensionQuickSelect) {
+            dimensionQuickSelect.addEventListener('change', function () {
+                const url = new URL(window.location.href);
+                url.searchParams.set('dimension', dimensionQuickSelect.value);
+                url.searchParams.set('source', '{{ source|escapejs }}');
+                window.location.href = url.toString();
+            });
+        }
+        if (budgetPlanForm && budgetPlanInputs.length) {
+            budgetPlanInputs.forEach((input) => {
+                input.addEventListener('input', updateBudgetTotals);
+                input.addEventListener('input', syncInlineDisplay);
+                input.addEventListener('keydown', handleBudgetInlineKeydown);
+                input.addEventListener('blur', handleBudgetInlineBlur);
+            });
+            if (budgetIncomeInput) {
+                budgetIncomeInput.addEventListener('input', updateBudgetTotals);
+                budgetIncomeInput.addEventListener('input', syncInlineDisplay);
+                budgetIncomeInput.addEventListener('keydown', handleBudgetInlineKeydown);
+                budgetIncomeInput.addEventListener('blur', handleBudgetInlineBlur);
+            }
+            document.querySelectorAll('.js-budget-inline-trigger').forEach((button) => {
+                button.addEventListener('click', function () {
+                    activateBudgetInline(button.closest('.js-budget-inline'));
+                });
+            });
+            updateBudgetTotals();
+        }
+
+        const commonScales = {
+            y: {
+                beginAtZero: true,
+                ticks: { callback: (value) => money(value) },
+                grid: { color: 'rgba(148, 163, 184, 0.18)' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        };
+
+        const trendCanvas = document.getElementById('forecastTrendChart');
+        if (hasCharts && trendCanvas) {
+            new Chart(trendCanvas, {
+                type: 'line',
+                data: {
+                    labels: payload.labels,
+                    datasets: [
+                        {
+                            label: 'Факт расходов',
+                            data: payload.expense,
+                            borderColor: '#0f766e',
+                            backgroundColor: 'rgba(15, 118, 110, 0.12)',
+                            borderWidth: 3,
+                            pointRadius: 3,
+                            tension: 0.28,
+                            fill: true
+                        },
+                        {
+                            label: 'Прогноз расходов',
+                            data: payload.forecast,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                            borderWidth: 3,
+                            borderDash: [6, 4],
+                            pointRadius: 3,
+                            tension: 0.28,
+                            spanGaps: true
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: commonScales,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${money(context.parsed.y)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        const structureCanvas = document.getElementById('forecastStructureChart');
+        if (hasCharts && structureCanvas) {
+            const regularFact = [...(payload.regular || [])];
+            const riskFact = [...(payload.risk || [])];
+            if (typeof payload.forecast_index === 'number') {
+                regularFact[payload.forecast_index] = null;
+                riskFact[payload.forecast_index] = null;
+            }
+            new Chart(structureCanvas, {
+                type: 'bar',
+                data: {
+                    labels: payload.labels,
+                    datasets: [
+                        {
+                            label: 'Регулярная часть',
+                            data: regularFact,
+                            backgroundColor: 'rgba(34, 197, 94, 0.45)',
+                            borderRadius: 4,
+                            stack: 'expenses',
+                            order: 2
+                        },
+                        {
+                            label: 'Рисковая часть',
+                            data: riskFact,
+                            backgroundColor: 'rgba(245, 158, 11, 0.45)',
+                            borderRadius: 4,
+                            stack: 'expenses',
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: 'Прогноз регулярной части',
+                            data: payload.regular_forecast,
+                            borderColor: '#15803d',
+                            backgroundColor: 'rgba(21, 128, 61, 0.08)',
+                            borderWidth: 2,
+                            borderDash: [5, 4],
+                            pointRadius: 2,
+                            tension: 0.25,
+                            spanGaps: true,
+                            order: 1
+                        },
+                        {
+                            type: 'line',
+                            label: 'Прогноз рисковой части',
+                            data: payload.risk_forecast,
+                            borderColor: '#d97706',
+                            backgroundColor: 'rgba(217, 119, 6, 0.08)',
+                            borderWidth: 2,
+                            borderDash: [5, 4],
+                            pointRadius: 2,
+                            tension: 0.25,
+                            spanGaps: true,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { callback: (value) => money(value) },
+                            grid: { color: 'rgba(148, 163, 184, 0.18)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${money(context.parsed.y)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        const categoryCanvas = document.getElementById('forecastCategoryChart');
+        if (hasCharts && categoryCanvas) {
+            const categoryWrap = document.getElementById('forecastCategoryChartWrap');
+            if (categoryWrap) {
+                categoryWrap.style.height = `${Math.max(320, (payload.top_category_labels || []).length * 42)}px`;
+            }
+            new Chart(categoryCanvas, {
+                type: 'bar',
+                data: {
+                    labels: payload.top_category_labels,
+                    datasets: [
+                        {
+                            label: 'Текущий месяц',
+                            data: payload.top_category_values,
+                            backgroundColor: '#0f766e',
+                            borderRadius: 4,
+                            barThickness: 14
+                        },
+                        {
+                            label: 'Среднее за историю',
+                            data: payload.top_category_avg_values,
+                            backgroundColor: 'rgba(100, 116, 139, 0.28)',
+                            borderRadius: 4,
+                            barThickness: 14
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    layout: { padding: { right: 72 } },
+                    interaction: { mode: 'y', axis: 'y', intersect: false },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { callback: (value) => money(value) },
+                            grid: { color: 'rgba(148, 163, 184, 0.18)' }
+                        },
+                        y: {
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => {
+                                    const index = items[0] ? items[0].dataIndex : null;
+                                    return index === null ? '' : ((payload.top_category_labels || [])[index] || '');
+                                },
+                                label: () => null,
+                                afterBody: (items) => {
+                                    const first = items[0];
+                                    if (!first) return '';
+                                    const index = first.dataIndex;
+                                    return [
+                                        `Факт: ${money((payload.top_category_values || [])[index])}`,
+                                        `Среднее: ${money((payload.top_category_avg_values || [])[index])}`,
+                                        `Прошлый месяц: ${money((payload.top_category_previous_values || [])[index])}`,
+                                        `К среднему: ${(payload.top_category_avg_delta_pct_labels || [])[index] || '0%'}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [categoryDeltaPlugin]
+            });
+        }
+
+        document.querySelectorAll('.js-anomaly-summary-row').forEach((row) => {
+            row.addEventListener('click', function () {
+                openAnomalyTransactions(row.dataset.key, row.dataset.title || '—', row.dataset.z || '', row.dataset.status || '', row.dataset.amount || '', row.dataset.expected || '');
+            });
+        });
+
+        document.querySelectorAll('.js-anomaly-cell').forEach((cell) => {
+            cell.addEventListener('click', function () {
+                openAnomalyTransactions(cell.dataset.key, cell.dataset.title || '—', cell.dataset.zDisplay || cell.dataset.z || '', cell.dataset.status || '', cell.dataset.amount || '', cell.dataset.expected || '');
+            });
+        });
+
+        function renderErrorChart() {
+            if (!window.Chart) return;
+            if (errorChart) {
+                errorChart.resize();
+                return;
+            }
+            const errorCanvas = document.getElementById('forecastErrorChart');
+            const labels = payload.error_labels || [];
+            if (!errorCanvas || !labels.length) return;
+
+            errorChart = new Chart(errorCanvas, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Абсолютная ошибка',
+                            data: payload.error_abs,
+                            backgroundColor: 'rgba(220, 38, 38, 0.24)',
+                            borderColor: '#dc2626',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'line',
+                            label: 'APE',
+                            data: payload.error_ape,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            tension: 0.25,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: (value) => money(value) },
+                            grid: { color: 'rgba(148, 163, 184, 0.18)' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            ticks: { callback: (value) => `${value}%` },
+                            grid: { drawOnChartArea: false }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => context.dataset.yAxisID === 'y1'
+                                    ? `${context.dataset.label}: ${context.parsed.y}%`
+                                    : `${context.dataset.label}: ${money(context.parsed.y)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderSelectedAnomalies(threshold) {
+            const tableWrap = document.getElementById('selectedAnomalyTableWrap');
+            const bodyEl = document.getElementById('selectedAnomalyBody');
+            const emptyEl = document.getElementById('selectedAnomalyEmpty');
+            const thresholdEl = document.getElementById('selectedAnomalyThreshold');
+            if (!bodyEl || !emptyEl) return;
+            if (thresholdEl) thresholdEl.textContent = currentThresholdLabel();
+
+            const rows = anomalyCandidates
+                .filter((item) => Math.abs(Number(item.z_score_value || 0)) >= threshold)
+                .sort((a, b) => Math.abs(Number(b.z_score_value || 0)) - Math.abs(Number(a.z_score_value || 0)))
+                .slice(0, 10);
+
+            bodyEl.innerHTML = '';
+            rows.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = 'clickable-row js-anomaly-summary-row';
+                tr.dataset.key = item.key || '';
+                tr.dataset.title = item.category || '—';
+                tr.dataset.z = item.z_score || '';
+                tr.dataset.status = item.type_label || '';
+                tr.dataset.amount = item.amount || '';
+                tr.dataset.expected = item.expected || '';
+                tr.innerHTML = `
+                    <td>${escapeHtml(item.category || '—')}</td>
+                    <td><span class="status-badge ${item.type === 'growth' ? 'status-badge-risk' : 'status-badge-regular'}">${escapeHtml(item.type_label || '—')}</span></td>
+                    <td class="text-end">${escapeHtml(item.amount || '0')} ${currency}</td>
+                    <td class="text-end">${escapeHtml(item.expected || '0')} ${currency}</td>
+                    <td class="text-end">${escapeHtml(item.z_score || '0')}</td>
+                `;
+                tr.addEventListener('click', function () {
+                    openAnomalyTransactions(
+                        tr.dataset.key,
+                        tr.dataset.title || '—',
+                        tr.dataset.z || '',
+                        tr.dataset.status || '',
+                        tr.dataset.amount || '',
+                        tr.dataset.expected || ''
+                    );
+                });
+                bodyEl.appendChild(tr);
+            });
+            if (tableWrap) tableWrap.classList.toggle('d-none', rows.length === 0);
+            emptyEl.classList.toggle('d-none', rows.length > 0);
+        }
+
+        function openAnomalyTransactions(key, title, zScore, status, amount, expected) {
+            const rows = anomalyTransactions[key] || [];
+            const titleEl = document.getElementById('anomalyTransactionsTitle');
+            const metaEl = document.getElementById('anomalyTransactionsMeta');
+            const bodyEl = document.getElementById('anomalyTransactionsBody');
+            const emptyEl = document.getElementById('anomalyTransactionsEmpty');
+            if (!bodyEl || !emptyEl) return;
+
+            titleEl.textContent = title;
+            if (metaEl) {
+                const statusText = status ? ` · Статус: ${status}` : '';
+                const amountText = amount ? ` · Расход: ${amount} ${currency}` : '';
+                const expectedText = expected ? ` · Среднее: ${expected} ${currency}` : '';
+                metaEl.textContent = `Порог: ${currentThresholdLabel()} · z-score: ${formatZScore(zScore)}${amountText}${expectedText}${statusText}`;
+            }
+            bodyEl.innerHTML = '';
+            rows.forEach((row) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(row.date || '—')}</td>
+                    <td>${escapeHtml(row.category || '—')}</td>
+                    <td>${escapeHtml(row.subcategory || '—')}</td>
+                    <td>${escapeHtml(row.comment || '—')}</td>
+                    <td>${escapeHtml(row.account || '—')}</td>
+                    <td class="text-end amount-expense">${escapeHtml(row.amount || '0')} ${currency}</td>
+                `;
+                bodyEl.appendChild(tr);
+            });
+            emptyEl.classList.toggle('d-none', rows.length > 0);
+
+            const modalEl = document.getElementById('anomalyTransactionsModal');
+            if (modalEl && window.bootstrap) {
+                window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+        }
+
+        function applyAnomalyThreshold(threshold) {
+            document.querySelectorAll('.js-anomaly-cell').forEach((cell) => {
+                const z = Number(cell.dataset.z || 0);
+                cell.classList.remove('anomaly-cell-growth', 'anomaly-cell-decrease', 'anomaly-cell-normal');
+                if (z >= threshold) {
+                    cell.classList.add('anomaly-cell-growth');
+                } else if (z <= -threshold) {
+                    cell.classList.add('anomaly-cell-decrease');
+                } else {
+                    cell.classList.add('anomaly-cell-normal');
+                }
+            });
+        }
+
+        function currentThresholdLabel() {
+            if (thresholdRange) return thresholdRange.value.replace('.', ',');
+            if (thresholdValue) return thresholdValue.textContent || '—';
+            return '—';
+        }
+
+        function formatZScore(value) {
+            const text = String(value || '').trim();
+            if (!text) return '—';
+            return text.replace('.', ',');
+        }
+
+        function deltaTextColor(value) {
+            const text = String(value || '').trim();
+            if (text.startsWith('+')) return '#dc2626';
+            if (text.startsWith('-')) return '#0f766e';
+            return '#475569';
+        }
+
+        function updateBudgetTotals() {
+            if (!budgetPlanForm) return;
+            const income = parseBudgetNumber(budgetIncomeInput ? budgetIncomeInput.value : '0');
+            const total = budgetPlanInputs.reduce((sum, input) => sum + parseBudgetNumber(input.value), 0);
+            const balance = income - total;
+            if (budgetPlannedTotalEl) {
+                budgetPlannedTotalEl.textContent = `${money(total)}`;
+            }
+            if (budgetPlannedBalanceEl) {
+                budgetPlannedBalanceEl.textContent = `${money(balance)}`;
+            }
+            if (budgetPlanTableTotalEl) {
+                budgetPlanTableTotalEl.textContent = `${money(total)}`;
+            }
+        }
+
+        function activateBudgetInline(container) {
+            if (!container) return;
+            const valueEl = container.querySelector('.js-budget-inline-value');
+            const triggerEl = container.querySelector('.js-budget-inline-trigger');
+            const inputEl = container.querySelector('.js-budget-inline-input');
+            if (valueEl) {
+                valueEl.classList.add('budget-hidden');
+            }
+            if (triggerEl) {
+                triggerEl.classList.add('budget-hidden');
+            }
+            if (inputEl) {
+                inputEl.dataset.originalValue = String(parseBudgetNumber(inputEl.value));
+                inputEl.classList.remove('budget-hidden');
+                inputEl.focus();
+                inputEl.select();
+            }
+        }
+
+        function syncInlineDisplay(event) {
+            const input = event.target;
+            const container = input.closest('.js-budget-inline');
+            if (!container) return;
+            const valueEl = container.querySelector('.js-budget-inline-value');
+            if (!valueEl) return;
+            valueEl.textContent = `${numberFormatter.format(parseBudgetNumber(input.value))} ${currency}`;
+        }
+
+        function collapseBudgetInline(container) {
+            if (!container) return;
+            const valueEl = container.querySelector('.js-budget-inline-value');
+            const triggerEl = container.querySelector('.js-budget-inline-trigger');
+            const inputEl = container.querySelector('.js-budget-inline-input');
+            if (valueEl) {
+                valueEl.classList.remove('budget-hidden');
+            }
+            if (triggerEl) {
+                triggerEl.classList.remove('budget-hidden');
+            }
+            if (inputEl) {
+                inputEl.classList.add('budget-hidden');
+            }
+        }
+
+        function handleBudgetInlineKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                event.target.blur();
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                const originalValue = event.target.dataset.originalValue;
+                if (typeof originalValue !== 'undefined') {
+                    event.target.value = originalValue;
+                    syncInlineDisplay({ target: event.target });
+                    updateBudgetTotals();
+                }
+                event.target.dataset.skipSave = '1';
+                event.target.blur();
+            }
+        }
+
+        function handleBudgetInlineBlur(event) {
+            const input = event.target;
+            const container = input.closest('.js-budget-inline');
+            if (!container) return;
+            if (input.dataset.skipSave === '1') {
+                input.dataset.skipSave = '';
+                collapseBudgetInline(container);
+                return;
+            }
+            const originalValue = String(parseBudgetNumber(input.dataset.originalValue || input.value));
+            const currentValue = String(parseBudgetNumber(input.value));
+            if (originalValue === currentValue) {
+                collapseBudgetInline(container);
+                return;
+            }
+            autosaveBudgetInline(input, container);
+        }
+
+        function autosaveBudgetInline(input, container) {
+            if (!budgetPlanForm) return;
+            if (budgetSavePromise) {
+                budgetSavePromise.finally(() => autosaveBudgetInline(input, container));
+                return;
+            }
+            setBudgetSaveStatus('Сохранение...', false);
+            budgetSavePromise = fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: new FormData(budgetPlanForm),
+                credentials: 'same-origin',
+            })
+                .then(async (response) => {
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || 'Не удалось сохранить план.');
+                    }
+                    input.dataset.originalValue = String(parseBudgetNumber(input.value));
+                    collapseBudgetInline(container);
+                    if (payload.saved_at && budgetSavedAtLabelEl) {
+                        budgetSavedAtLabelEl.textContent = `Последнее сохранение: ${payload.saved_at}.`;
+                    }
+                    setBudgetSaveStatus(payload.saved_at ? `Сохранено ${payload.saved_at}` : (payload.message || 'Сохранено'), false);
+                })
+                .catch((error) => {
+                    setBudgetSaveStatus(error.message || 'Не удалось сохранить план.', true);
+                    input.focus();
+                    input.select();
+                })
+                .finally(() => {
+                    budgetSavePromise = null;
+                });
+        }
+
+        function setBudgetSaveStatus(message, isError) {
+            if (!budgetSaveStatusEl) return;
+            budgetSaveStatusEl.textContent = message || '';
+            budgetSaveStatusEl.classList.toggle('budget-status-error', Boolean(isError));
+        }
+
+        function parseBudgetNumber(value) {
+            const normalized = String(value || '').trim().replace(',', '.');
+            const parsed = Number.parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        {% if show_file_mapping_modal %}
+        const fileModalEl = document.getElementById('fileSourceModal');
+        if (fileModalEl && window.bootstrap) {
+            window.bootstrap.Modal.getOrCreateInstance(fileModalEl).show();
+        }
+        {% endif %}
+    });
+</script>
+{% endif %}
+{% endblock %}

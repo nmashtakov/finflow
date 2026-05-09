@@ -9,6 +9,7 @@ from core.models import (
     Currency,
     Transaction,
 )
+from .models import BybitConnection
 
 
 class TransactionImportUploadForm(forms.Form):
@@ -16,6 +17,7 @@ class TransactionImportUploadForm(forms.Form):
         ('auto', 'Определить автоматически'),
         ('tinkoff', 'Тинькофф'),
         ('alfa', 'Альфа-Банк'),
+        ('t_business', 'Т Бизнес'),
         ('other', 'Другое'),
     ]
     file = forms.FileField(
@@ -29,31 +31,81 @@ class TransactionImportUploadForm(forms.Form):
         initial='auto',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    include_tinkoff_invest_rounding = forms.BooleanField(
+        label='Учитывать пополнение Инвесткопилки',
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+
+class TinkoffImportAccountForm(forms.Form):
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        account_choices = Account.objects.filter(user=user, status='active').order_by('name') if user else Account.objects.none()
+        currency_choices = [
+            (c.code, f"{c.code} — {c.name}")
+            for c in Currency.objects.filter(status='active').order_by('code')
+        ]
+        self.fields['default_account'] = forms.ModelChoiceField(
+            queryset=account_choices,
+            required=False,
+            label='Счёт для всей выгрузки'
+        )
+        self.fields['default_account_name'] = forms.CharField(
+            label='Или создать новый счёт',
+            required=False
+        )
+        self.fields['default_currency'] = forms.ChoiceField(
+            label='Валюта по умолчанию',
+            choices=currency_choices,
+            initial='RUB' if any(code == 'RUB' for code, _ in currency_choices) else (currency_choices[0][0] if currency_choices else ''),
+            required=False,
+        )
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault('class', 'form-select')
+            else:
+                field.widget.attrs.setdefault('class', 'form-control')
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('default_account') and not cleaned.get('default_account_name'):
+            raise forms.ValidationError('Выберите существующий счёт или укажите название нового.')
+        return cleaned
 
 
 class TransactionImportMappingForm(forms.Form):
     def __init__(self, *args, columns=None, user=None, preset_initial=None, **kwargs):
         super().__init__(*args, **kwargs)
         columns = columns or []
+        currency_choices = [
+            (c.code, f"{c.code} — {c.name}")
+            for c in Currency.objects.filter(status='active').order_by('code')
+        ]
         required_choices = [('', '— Выберите колонку —')] + [(col, col) for col in columns]
         optional_choices = [('', '— Не использовать —')] + [(col, col) for col in columns]
 
         self.fields['column_date'] = forms.ChoiceField(label='Дата операции', choices=required_choices)
         self.fields['column_amount'] = forms.ChoiceField(label='Сумма', choices=required_choices)
         self.fields['column_currency'] = forms.ChoiceField(label='Валюта', choices=optional_choices, required=False)
-        self.fields['default_currency'] = forms.CharField(label='Валюта по умолчанию', initial='RUB', required=False)
+        self.fields['default_currency'] = forms.ChoiceField(
+            label='Валюта по умолчанию',
+            choices=currency_choices,
+            initial='RUB' if any(code == 'RUB' for code, _ in currency_choices) else (currency_choices[0][0] if currency_choices else ''),
+            required=False,
+        )
 
         self.fields['column_type'] = forms.ChoiceField(label='Колонка типа операции (доход/расход)', choices=optional_choices, required=False)
         self.fields['income_markers'] = forms.CharField(
             label='Значения для доходов',
             required=False,
-            initial='доход,поступление,пополнение',
+            initial='доход,поступление,пополнение,кредит',
             help_text='Через запятую; сравнение без учёта регистра.'
         )
         self.fields['expense_markers'] = forms.CharField(
             label='Значения для расходов',
             required=False,
-            initial='расход,списание,платёж,платеж',
+            initial='расход,списание,платёж,платеж,дебет',
             help_text='Через запятую; сравнение без учёта регистра.'
         )
 
@@ -82,7 +134,7 @@ class TransactionImportMappingForm(forms.Form):
             required=False
         )
 
-        self.fields['column_category'] = forms.ChoiceField(label='Колонка с категорией', choices=required_choices, required=True)
+        self.fields['column_category'] = forms.ChoiceField(label='Колонка с категорией', choices=optional_choices, required=False)
         self.fields['column_subcategory'] = forms.ChoiceField(label='Колонка с подкатегорией', choices=optional_choices, required=False)
 
         self.fields['column_comment'] = forms.ChoiceField(label='Колонка с комментарием', choices=optional_choices, required=False)
@@ -109,13 +161,15 @@ class TransactionImportMappingForm(forms.Form):
         if not cleaned.get('column_project') and not cleaned.get('default_project') and not cleaned.get('default_project_name'):
             raise forms.ValidationError('Укажите колонку с проектом или задайте проект по умолчанию.')
 
-        if not cleaned.get('column_category'):
-            raise forms.ValidationError('Укажите колонку с категорией.')
-
         return cleaned
 
 
 class TransactionForm(forms.ModelForm):
+    class ExpenseLinkChoiceField(forms.ModelChoiceField):
+        def label_from_instance(self, obj):
+            subcategory = f" -> {obj.subcategory.name}" if obj.subcategory else ""
+            return f"{obj.project.name} -> {obj.category.name}{subcategory}"
+
     date = forms.DateTimeField(
         label='Дата и время',
         widget=forms.DateTimeInput(
@@ -126,12 +180,9 @@ class TransactionForm(forms.ModelForm):
     amount = forms.DecimalField(label='Сумма', max_digits=14, decimal_places=2)
     currency = forms.ChoiceField(label='Валюта')
     account = forms.ModelChoiceField(label='Счёт', queryset=Account.objects.none())
-    project = forms.ModelChoiceField(label='Проект', queryset=Project.objects.none())
-    category = forms.ModelChoiceField(label='Категория', queryset=Category.objects.none())
-    subcategory = forms.ModelChoiceField(
-        label='Подкатегория',
-        queryset=Subcategory.objects.none(),
-        required=False,
+    expense_link = ExpenseLinkChoiceField(
+        label='Категория',
+        queryset=ExpenseLink.objects.none(),
     )
     comment = forms.CharField(
         label='Комментарий',
@@ -146,6 +197,7 @@ class TransactionForm(forms.ModelForm):
             'amount',
             'currency',
             'account',
+            'expense_link',
             'comment',
         ]
 
@@ -163,9 +215,16 @@ class TransactionForm(forms.ModelForm):
                 widget.attrs['class'] = f"{css_classes} form-control".strip()
 
         self.fields['account'].queryset = Account.objects.filter(user=user, status='active').order_by('name')
-        self.fields['project'].queryset = Project.objects.filter(user=user, status='active').order_by('name')
-        self.fields['category'].queryset = Category.objects.filter(user=user, status='active').order_by('name')
-        self.fields['subcategory'].queryset = Subcategory.objects.filter(user=user, status='active').order_by('name')
+        self.fields['expense_link'].queryset = (
+            ExpenseLink.objects.filter(
+                user=user,
+                status='active',
+                project__status='active',
+                category__status='active',
+            )
+            .select_related('project', 'category', 'subcategory')
+            .order_by('project__name', 'category__name', 'subcategory__name')
+        )
 
         currencies = Currency.objects.filter(status='active').order_by('code')
         self.fields['currency'].choices = [(c.code, f"{c.code} — {c.name}") for c in currencies]
@@ -183,43 +242,16 @@ class TransactionForm(forms.ModelForm):
             raise forms.ValidationError('Счёт недоступен.')
         return account
 
-    def clean_project(self):
-        project = self.cleaned_data['project']
-        if project.user != self.user or project.status != 'active':
-            raise forms.ValidationError('Проект недоступен.')
-        return project
-
-    def clean_category(self):
-        category = self.cleaned_data['category']
-        if category.user != self.user or category.status != 'active':
+    def clean_expense_link(self):
+        expense_link = self.cleaned_data['expense_link']
+        if (
+            expense_link.user != self.user
+            or expense_link.status != 'active'
+            or expense_link.project.status != 'active'
+            or expense_link.category.status != 'active'
+        ):
             raise forms.ValidationError('Категория недоступна.')
-        return category
-
-    def clean_subcategory(self):
-        subcategory = self.cleaned_data.get('subcategory')
-        if subcategory:
-            if subcategory.user != self.user or subcategory.status != 'active':
-                raise forms.ValidationError('Подкатегория недоступна.')
-        return subcategory
-
-    def clean(self):
-        cleaned_data = super().clean()
-        project = cleaned_data.get('project')
-        category = cleaned_data.get('category')
-        subcategory = cleaned_data.get('subcategory')
-
-        if project and category:
-            expense_link = ExpenseLink.objects.filter(
-                user=self.user,
-                project=project,
-                category=category,
-                subcategory=subcategory,
-                status='active'
-            ).first()
-            if not expense_link:
-                raise forms.ValidationError('Для выбранных проекта и категории нет активной связи.')
-            cleaned_data['expense_link'] = expense_link
-        return cleaned_data
+        return expense_link
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -238,3 +270,53 @@ class TransactionForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class BybitConnectionForm(forms.ModelForm):
+    class Meta:
+        model = BybitConnection
+        fields = ["name", "api_key", "api_secret", "is_testnet", "is_active"]
+        labels = {
+            "name": "Название подключения",
+            "api_key": "API Key",
+            "api_secret": "API Secret",
+            "is_testnet": "Testnet",
+            "is_active": "Активно",
+        }
+        widgets = {
+            "api_secret": forms.PasswordInput(render_value=False),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            # Не подставляем секрет в HTML при редактировании.
+            self.fields["api_secret"].required = False
+            self.fields["api_key"].required = False
+            self.initial["api_key"] = ""
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(widget, (forms.Select, forms.SelectMultiple)):
+                widget.attrs.setdefault("class", "form-select")
+            else:
+                css_classes = widget.attrs.get("class", "")
+                widget.attrs["class"] = f"{css_classes} form-control".strip()
+
+    def clean_api_secret(self):
+        secret = (self.cleaned_data.get("api_secret") or "").strip()
+        if secret:
+            return secret
+        if self.instance and self.instance.pk:
+            # Если поле пустое при редактировании, оставляем старый секрет.
+            return self.instance.api_secret
+        raise forms.ValidationError("API Secret обязателен.")
+
+    def clean_api_key(self):
+        key = (self.cleaned_data.get("api_key") or "").strip()
+        if key:
+            return key
+        if self.instance and self.instance.pk:
+            return self.instance.api_key
+        raise forms.ValidationError("API Key обязателен.")

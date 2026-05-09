@@ -1,0 +1,285 @@
+{% extends "components/base.html" %}
+
+{% block title %}Bybit Sync{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Bybit API (staging)</h1>
+            <p class="text-muted mb-0">Изолированный импорт: события пишутся только в staging, без добавления в основную таблицу транзакций.</p>
+        </div>
+        <a class="btn btn-outline-primary" href="{% url 'transactions:bybit-connections' %}">API подключения</a>
+    </div>
+
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        {% if 'bybit' in message.tags %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-2">
+            {{ message }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not connections %}
+    <div class="alert alert-warning mb-4">
+        Нет API-подключений Bybit. Сначала добавьте подключение на странице
+        <a href="{% url 'transactions:bybit-connections' %}">API подключения</a>.
+    </div>
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header">Тестовый sync (изолированный)</div>
+        <div class="card-body">
+            <form method="post" class="row g-3 align-items-end" id="bybitSyncForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="sync_connection">
+                <div class="col-md-4">
+                    <label class="form-label" for="connection_id">Подключение</label>
+                    <select class="form-select" id="connection_id" name="connection_id" required>
+                        {% for item in connections %}
+                        <option value="{{ item.id }}" {% if selected_connection and selected_connection.id == item.id %}selected{% endif %}>
+                            {{ item.name }} {% if item.is_testnet %}(testnet){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="date_from">Дата от</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="date_to">Дата до</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label d-block mb-2">Типы операций для sync</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        {% for stream_value, stream_label in stream_options %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="streams" value="{{ stream_value }}" id="stream_{{ stream_value }}" checked>
+                            <label class="form-check-label" for="stream_{{ stream_value }}">{{ stream_label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button id="bybitSyncSubmit" type="submit" class="btn btn-outline-primary" {% if not connections %}disabled{% endif %}>
+                        <span class="btn-label">Запустить sync</span>
+                        <span class="spinner-border spinner-border-sm d-none ms-2" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </form>
+            {% if selected_connection %}
+            <form method="post" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="clear_staging">
+                <input type="hidden" name="connection_id" value="{{ selected_connection.id }}">
+                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Очистить staging-события по этому подключению?')">
+                    Удалить staging транзакции
+                </button>
+            </form>
+            {% endif %}
+            <small class="text-muted d-block mt-2">На этом этапе данные пишутся только в staging-таблицу `BybitExternalEvent`.</small>
+            <small class="text-muted d-block mt-1">Укажи обязательный диапазон дат «от/до» для sync.</small>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">История sync</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Статус</th>
+                            <th>Период</th>
+                            <th>Fetched</th>
+                            <th>Inserted</th>
+                            <th>Updated</th>
+                            <th>Сообщение</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for run in sync_runs %}
+                        <tr>
+                            <td>#{{ run.id }}</td>
+                            <td>
+                                {% if run.status == 'success' %}
+                                <span class="badge bg-success">Успешно</span>
+                                {% else %}
+                                <span class="badge bg-danger">Ошибка</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ run.range_from|date:"d.m.Y H:i" }} - {{ run.range_to|date:"d.m.Y H:i" }}</td>
+                            <td>{{ run.fetched_count }}</td>
+                            <td>{{ run.inserted_count }}</td>
+                            <td>{{ run.updated_count }}</td>
+                            <td>{{ run.message|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">Запусков пока нет.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if sync_runs_page and sync_runs_page.paginator.num_pages > 1 %}
+            <div class="p-3 border-top d-flex justify-content-between align-items-center">
+                <small class="text-muted">Страница {{ sync_runs_page.number }} из {{ sync_runs_page.paginator.num_pages }}</small>
+                <div class="btn-group btn-group-sm" role="group">
+                    {% if sync_runs_page.has_previous %}
+                    <a class="btn btn-outline-secondary" href="?connection={{ selected_connection.id }}&stream={{ event_filters.stream }}&asset={{ event_filters.asset }}&direction={{ event_filters.direction }}&q={{ event_filters.q }}&sort={{ event_filters.sort }}&runs_page={{ sync_runs_page.previous_page_number }}">Назад</a>
+                    {% endif %}
+                    {% if sync_runs_page.has_next %}
+                    <a class="btn btn-outline-secondary" href="?connection={{ selected_connection.id }}&stream={{ event_filters.stream }}&asset={{ event_filters.asset }}&direction={{ event_filters.direction }}&q={{ event_filters.q }}&sort={{ event_filters.sort }}&runs_page={{ sync_runs_page.next_page_number }}">Вперед</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Сырые события (staging)</div>
+        <div class="card-body border-bottom">
+            <form method="get" class="row g-2 align-items-end">
+                <input type="hidden" name="connection" value="{% if selected_connection %}{{ selected_connection.id }}{% endif %}">
+                <div class="col-md-2">
+                    <label class="form-label">Поток</label>
+                    <select class="form-select" name="stream">
+                        <option value="">Все</option>
+                        {% for stream in stream_choices %}
+                        <option value="{{ stream }}" {% if event_filters.stream == stream %}selected{% endif %}>{{ stream }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Asset</label>
+                    <select class="form-select" name="asset">
+                        <option value="">Все</option>
+                        {% for asset in asset_choices %}
+                        <option value="{{ asset }}" {% if event_filters.asset == asset %}selected{% endif %}>{{ asset }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Direction</label>
+                    <select class="form-select" name="direction">
+                        <option value="">Все</option>
+                        {% for value, label in direction_choices %}
+                        <option value="{{ value }}" {% if event_filters.direction == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Сортировка</label>
+                    <select class="form-select" name="sort">
+                        <option value="-occurred_at" {% if event_filters.sort == '-occurred_at' %}selected{% endif %}>Время: новые</option>
+                        <option value="occurred_at" {% if event_filters.sort == 'occurred_at' %}selected{% endif %}>Время: старые</option>
+                        <option value="-id" {% if event_filters.sort == '-id' %}selected{% endif %}>ID: новые</option>
+                        <option value="id" {% if event_filters.sort == 'id' %}selected{% endif %}>ID: старые</option>
+                        <option value="-amount" {% if event_filters.sort == '-amount' %}selected{% endif %}>Сумма: убыв.</option>
+                        <option value="amount" {% if event_filters.sort == 'amount' %}selected{% endif %}>Сумма: возр.</option>
+                        <option value="-fee_amount" {% if event_filters.sort == '-fee_amount' %}selected{% endif %}>Комиссия: убыв.</option>
+                        <option value="fee_amount" {% if event_filters.sort == 'fee_amount' %}selected{% endif %}>Комиссия: возр.</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Поиск</label>
+                    <input type="text" class="form-control" name="q" value="{{ event_filters.q }}" placeholder="external id / description">
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-outline-primary">Применить</button>
+                </div>
+            </form>
+            {% if selected_connection %}
+            <form method="post" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_import_session">
+                <input type="hidden" name="connection_id" value="{{ selected_connection.id }}">
+                <input type="hidden" name="stream" value="{{ event_filters.stream }}">
+                <input type="hidden" name="asset" value="{{ event_filters.asset }}">
+                <input type="hidden" name="direction" value="{{ event_filters.direction }}">
+                <input type="hidden" name="q" value="{{ event_filters.q }}">
+                <button type="submit" class="btn btn-primary">
+                    Создать сессию разметки из текущих событий
+                </button>
+                <small class="text-muted d-block mt-1">
+                    Используются текущие фильтры и только новые события (которые ещё не попадали в import-сессию).
+                </small>
+            </form>
+            {% endif %}
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Время</th>
+                            <th>Поток</th>
+                            <th>External ID</th>
+                            <th>Asset</th>
+                            <th>Amount</th>
+                            <th>Fee</th>
+                            <th>Direction</th>
+                            <th>Description</th>
+                            <th>Raw payload</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                        <tr>
+                            <td>#{{ event.id }}</td>
+                            <td>{% if event.occurred_at %}{{ event.occurred_at|date:"d.m.Y H:i:s" }}{% else %}-{% endif %}</td>
+                            <td>{{ event.stream }}</td>
+                            <td>{{ event.external_id|default:"-" }}</td>
+                            <td>{{ event.asset|default:"-" }}</td>
+                            <td>{% if event.amount is not None %}{{ event.amount }}{% else %}-{% endif %}</td>
+                            <td>{% if event.fee_amount is not None %}{{ event.fee_amount }}{% else %}-{% endif %}</td>
+                            <td>{{ event.get_direction_display }}</td>
+                            <td>{{ event.description|default:"-" }}</td>
+                            <td>
+                                <details>
+                                    <summary>JSON</summary>
+                                    <pre class="small mb-0" style="max-width: 520px; white-space: pre-wrap;">{{ event.raw_payload|pprint }}</pre>
+                                </details>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="10" class="text-center text-muted py-4">Событий пока нет.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('bybitSyncForm');
+    const submitBtn = document.getElementById('bybitSyncSubmit');
+    if (!form || !submitBtn) return;
+    form.addEventListener('submit', function (event) {
+        const selectedStreams = form.querySelectorAll('input[name="streams"]:checked');
+        if (!selectedStreams.length) {
+            event.preventDefault();
+            alert('Выбери минимум один тип операций для sync.');
+            return;
+        }
+        submitBtn.disabled = true;
+        const spinner = submitBtn.querySelector('.spinner-border');
+        const label = submitBtn.querySelector('.btn-label');
+        if (spinner) spinner.classList.remove('d-none');
+        if (label) label.textContent = 'Синхронизация...';
+    });
+});
+</script>
+{% endblock %}

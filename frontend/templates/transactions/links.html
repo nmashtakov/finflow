@@ -1,0 +1,492 @@
+{% extends "components/base.html" %}
+
+{% block title %}Связки операций{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Связки операций</h1>
+            <p class="text-muted mb-0">Рекомендации показывают операции без связки. Связывайте в 1 клик.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        {% if 'bybit' not in message.tags %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-2">
+            {{ message }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header">Требуют внимания</div>
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end mb-3">
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Тип очереди</label>
+                    <select class="form-select" name="pending">
+                        <option value="" {% if not pending_filter %}selected{% endif %}>Все</option>
+                        <option value="reimbursement" {% if pending_filter == 'reimbursement' %}selected{% endif %}>Возвраты</option>
+                        <option value="transfer" {% if pending_filter == 'transfer' %}selected{% endif %}>Переводы между счетами</option>
+                        <option value="people_transfer" {% if pending_filter == 'people_transfer' %}selected{% endif %}>Переводы между людьми</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Счет</label>
+                    <select class="form-select" name="account">
+                        <option value="">Все счета</option>
+                        {% for acc in accounts %}
+                        <option value="{{ acc.id }}" {% if account_filter == acc.id|stringformat:'s' %}selected{% endif %}>{{ acc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">Период (дней)</label>
+                    <input type="number" min="7" max="365" class="form-control" name="days" value="{{ days_filter }}">
+                </div>
+                <div class="col-12 col-md-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-outline-primary">Применить</button>
+                    <a href="{% url 'transactions:links' %}" class="btn btn-outline-secondary">Сбросить</a>
+                </div>
+            </form>
+
+            <div class="row g-3">
+                <div class="col-12 col-xl-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Возвраты</h6>
+                            <span class="badge bg-light text-dark">{{ pending_reimbursements|length }}</span>
+                        </div>
+                        {% if pending_reimbursements %}
+                            {% for item in pending_reimbursements %}
+                            <div class="border rounded p-2 mb-2 bg-light-subtle js-link-card"
+                                 data-link-type="{{ item.suggestion_type }}"
+                                 data-first-id="{{ item.tx.id }}"
+                                 data-mode="reimbursement"
+                                 data-first-label="#{{ item.tx.id }} {{ item.tx.date }} | {{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}">
+                                <div class="small mb-1"><strong>#{{ item.tx.id }}</strong> {{ item.tx.date }}</div>
+                                <div class="small mb-1">{{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}</div>
+                                <div class="small text-muted mb-1">{{ item.tx.category_path }}</div>
+                                <div class="small text-muted mb-2">Комментарий: {{ item.tx.comment }}</div>
+                                <select class="d-none js-suggestions-source" multiple>
+                                    {% for tx in item.suggestions %}
+                                    <option value="{{ tx.id }}" title="{{ tx.full_label|default:tx.label }}">{{ tx.label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-sm btn-primary w-100 js-open-link-modal">Подобрать связку</button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-muted small">Ничего не найдено.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-12 col-xl-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Переводы между счетами</h6>
+                            <span class="badge bg-light text-dark">{{ pending_transfers|length }}</span>
+                        </div>
+                        {% if pending_transfers %}
+                            {% for item in pending_transfers %}
+                            <div class="border rounded p-2 mb-2 bg-light-subtle js-link-card"
+                                 data-link-type="{{ item.suggestion_type }}"
+                                 data-first-id="{{ item.tx.id }}"
+                                 data-mode="pair"
+                                 data-first-label="#{{ item.tx.id }} {{ item.tx.date }} | {{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}">
+                                <div class="small mb-1"><strong>#{{ item.tx.id }}</strong> {{ item.tx.date }}</div>
+                                <div class="small mb-1">{{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}</div>
+                                <div class="small text-muted mb-1">{{ item.tx.category_path }}</div>
+                                <div class="small text-muted mb-2">Комментарий: {{ item.tx.comment }}</div>
+                                <select class="d-none js-suggestions-source">
+                                    {% for tx in item.suggestions %}
+                                    <option value="{{ tx.id }}" title="{{ tx.full_label|default:tx.label }}">{{ tx.label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-sm btn-primary w-100 js-open-link-modal">Подобрать связку</button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-muted small">Ничего не найдено.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-12 col-xl-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Переводы между людьми</h6>
+                            <span class="badge bg-light text-dark">{{ pending_people_transfers|length }}</span>
+                        </div>
+                        {% if pending_people_transfers %}
+                            {% for item in pending_people_transfers %}
+                            <div class="border rounded p-2 mb-2 bg-light-subtle js-link-card"
+                                 data-link-type="{{ item.suggestion_type }}"
+                                 data-first-id="{{ item.tx.id }}"
+                                 data-mode="pair"
+                                 data-first-label="#{{ item.tx.id }} {{ item.tx.date }} | {{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}">
+                                <div class="small mb-1"><strong>#{{ item.tx.id }}</strong> {{ item.tx.date }}</div>
+                                <div class="small mb-1">{{ item.tx.amount_text }} {{ item.tx.currency }} | {{ item.tx.account }}</div>
+                                <div class="small text-muted mb-1">{{ item.tx.category_path }}</div>
+                                <div class="small text-muted mb-2">Комментарий: {{ item.tx.comment }}</div>
+                                <select class="d-none js-suggestions-source">
+                                    {% for tx in item.suggestions %}
+                                    <option value="{{ tx.id }}" title="{{ tx.full_label|default:tx.label }}">{{ tx.label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-sm btn-primary w-100 js-open-link-modal">Подобрать связку</button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-muted small">Ничего не найдено.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="linkSuggestionModal" tabindex="-1" aria-labelledby="linkSuggestionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <form method="post" class="modal-content" id="linkSuggestionForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_link_suggested">
+                <input type="hidden" name="link_type" id="modalLinkType">
+                <input type="hidden" name="first_transaction_id" id="modalFirstTransactionId">
+                <input type="hidden" name="type" value="{{ type_filter }}">
+                <input type="hidden" name="pending" value="{{ pending_filter }}">
+                <input type="hidden" name="account" value="{{ account_filter }}">
+                <input type="hidden" name="days" value="{{ days_filter }}">
+                <div id="modalSecondIdsContainer"></div>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="linkSuggestionModalLabel">Рекомендованные операции</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="small text-muted mb-2">Базовая транзакция</div>
+                    <div class="border rounded p-2 mb-3 fw-semibold" id="modalFirstTransactionLabel"></div>
+                    <select class="form-select form-select-sm mb-2" id="modalSuggestedSelect" size="10"></select>
+                    <div class="form-text mb-2" id="modalSelectHint">Выберите одну операцию.</div>
+                    <hr class="my-3">
+                    <div class="small text-muted mb-2">Поиск по всем операциям (на крайний случай)</div>
+                    <div class="d-flex gap-2 mb-2">
+                        <input class="form-control form-control-sm" id="modalAllQuery" placeholder="Ключ: комментарий / категория / ID">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="modalAllSearchBtn">Найти</button>
+                    </div>
+                    <select class="form-select form-select-sm mb-2" id="modalAllSelect" size="8"></select>
+                    <div class="form-text mb-2">Если нашли нужную операцию здесь, можно выбрать её вместо рекомендованных.</div>
+                    <input class="form-control form-control-sm" name="note" placeholder="Комментарий (опц.)">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Связать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Новая связка (ручной режим)</div>
+        <div class="card-body">
+            <form method="post" class="row g-3">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_link">
+                <input type="hidden" name="type" value="{{ type_filter }}">
+                <input type="hidden" name="pending" value="{{ pending_filter }}">
+                <input type="hidden" name="account" value="{{ account_filter }}">
+                <input type="hidden" name="days" value="{{ days_filter }}">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Тип</label>
+                    <select class="form-select" name="link_type" required>
+                        {% for value, label in link_type_choices %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="form-label">Транзакция 1</label>
+                    <select class="form-select" name="first_transaction_id" required>
+                        <option value="">Выберите транзакцию</option>
+                        {% for option in tx_options %}
+                        <option value="{{ option.id }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="form-label">Транзакция 2</label>
+                    <select class="form-select" name="second_transaction_id" required>
+                        <option value="">Выберите транзакцию</option>
+                        {% for option in tx_options %}
+                        <option value="{{ option.id }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-lg-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-outline-primary w-100">Создать</button>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Комментарий (опционально)</label>
+                    <input class="form-control" type="text" name="note" placeholder="Например: падел 08.11">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Уже созданные связки</h6>
+                <form method="get" class="d-flex gap-2">
+                    <select class="form-select form-select-sm" name="type">
+                        <option value="">Все типы</option>
+                        {% for value, label in link_type_choices %}
+                        <option value="{{ value }}" {% if type_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Применить</button>
+                </form>
+            </div>
+            {% if groups %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Тип</th>
+                            <th>Операции</th>
+                            <th>Комментарий</th>
+                            <th>Создано</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in groups %}
+                        <tr>
+                            <td>#{{ group.id }}</td>
+                            <td>{{ group.link_type }}</td>
+                            <td>
+                                {% for item in group.items %}
+                                <div class="small mb-2">
+                                    {% if item.role_key == 'primary' %}
+                                    <span class="badge role-badge role-primary me-1">{{ item.role }}</span>
+                                    {% elif item.role_key == 'offset' %}
+                                    <span class="badge role-badge role-offset me-1">{{ item.role }}</span>
+                                    {% elif item.role_key == 'outgoing' %}
+                                    <span class="badge role-badge role-outgoing me-1">{{ item.role }}</span>
+                                    {% elif item.role_key == 'incoming' %}
+                                    <span class="badge role-badge role-incoming me-1">{{ item.role }}</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-dark me-1">{{ item.role }}</span>
+                                    {% endif %}
+                                    <span class="fw-semibold">#{{ item.tx_id }}</span>
+                                    | {{ item.date|date:"d.m.Y H:i" }}
+                                    | {{ item.amount_text }} {{ item.currency }}
+                                    | {{ item.account }}
+                                    | {{ item.kind }}
+                                    <div class="text-muted">{{ item.category_path }}</div>
+                                    <div class="text-muted">Комментарий: {{ item.comment }}</div>
+                                </div>
+                                {% endfor %}
+                            </td>
+                            <td>{{ group.note|default:"—" }}</td>
+                            <td>{{ group.created_at|date:"d.m.Y H:i" }}</td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline" onsubmit="return confirm('Удалить связку?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete_link">
+                                    <input type="hidden" name="group_id" value="{{ group.id }}">
+                                    <input type="hidden" name="type" value="{{ type_filter }}">
+                                    <input type="hidden" name="pending" value="{{ pending_filter }}">
+                                    <input type="hidden" name="account" value="{{ account_filter }}">
+                                    <input type="hidden" name="days" value="{{ days_filter }}">
+                                    <button type="submit" class="btn btn-datatable btn-icon btn-transparent-dark text-danger" title="Удалить связку" aria-label="Удалить связку">
+                                        <i data-feather="trash-2"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Связок пока нет.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<style>
+.role-badge {
+    border: 1px solid transparent;
+}
+.role-primary {
+    background-color: #fde8e8;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+.role-offset {
+    background-color: #e8f7ee;
+    color: #166534;
+    border-color: #bbf7d0;
+}
+.role-outgoing {
+    background-color: #fff4e5;
+    color: #9a3412;
+    border-color: #fed7aa;
+}
+.role-incoming {
+    background-color: #e8f1ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('linkSuggestionModal');
+    var formEl = document.getElementById('linkSuggestionForm');
+    var linkTypeEl = document.getElementById('modalLinkType');
+    var firstIdEl = document.getElementById('modalFirstTransactionId');
+    var firstLabelEl = document.getElementById('modalFirstTransactionLabel');
+    var suggestedEl = document.getElementById('modalSuggestedSelect');
+    var allQueryEl = document.getElementById('modalAllQuery');
+    var allSearchBtn = document.getElementById('modalAllSearchBtn');
+    var allSelectEl = document.getElementById('modalAllSelect');
+    var secondIdsContainer = document.getElementById('modalSecondIdsContainer');
+    var hintEl = document.getElementById('modalSelectHint');
+    if (!modalEl || !formEl || !suggestedEl) return;
+
+    var bs = window.bootstrap || (typeof bootstrap !== 'undefined' ? bootstrap : null);
+    var modal = bs && bs.Modal ? bs.Modal.getOrCreateInstance(modalEl) : null;
+    var mode = 'pair';
+
+    function mapOptions(selectEl) {
+        return Array.prototype.map.call(selectEl.options, function (option) {
+            return {
+                value: option.value,
+                text: option.textContent || '',
+                title: option.title || option.textContent || '',
+            };
+        });
+    }
+
+    function fillSuggested(options) {
+        suggestedEl.innerHTML = '';
+        options.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.text;
+            option.title = item.title;
+            suggestedEl.appendChild(option);
+        });
+    }
+
+    function fillAllResults(options) {
+        if (!allSelectEl) return;
+        allSelectEl.innerHTML = '';
+        (options || []).forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = item.label;
+            allSelectEl.appendChild(option);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        var btn = event.target.closest('.js-open-link-modal');
+        if (!btn) return;
+        var card = btn.closest('.js-link-card');
+        if (!card) return;
+
+        var suggestionsSource = card.querySelector('.js-suggestions-source');
+        fillSuggested(suggestionsSource ? mapOptions(suggestionsSource) : []);
+        mode = card.dataset.mode || 'pair';
+        linkTypeEl.value = card.dataset.linkType || '';
+        firstIdEl.value = card.dataset.firstId || '';
+        firstLabelEl.textContent = card.dataset.firstLabel || '';
+        suggestedEl.multiple = mode === 'reimbursement';
+        if (allSelectEl) {
+            allSelectEl.multiple = mode === 'reimbursement';
+            allSelectEl.innerHTML = '';
+        }
+        if (allQueryEl) allQueryEl.value = '';
+        hintEl.textContent = mode === 'reimbursement'
+            ? 'Можно выбрать несколько операций (Ctrl/Cmd + клик).'
+            : 'Выберите одну операцию.';
+
+        if (modal) {
+            modal.show();
+        } else {
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+        }
+    });
+
+    if (allSearchBtn) {
+        allSearchBtn.addEventListener('click', function () {
+            var q = (allQueryEl && allQueryEl.value ? allQueryEl.value : '').trim();
+            if (q.length < 2) {
+                fillAllResults([]);
+                return;
+            }
+            var params = new URLSearchParams();
+            params.set('q', q);
+            params.set('mode', mode);
+            params.set('base_id', firstIdEl.value || '');
+            fetch('{% url "transactions:links-lookup" %}?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (body) {
+                    fillAllResults(body.results || []);
+                })
+                .catch(function () {
+                    fillAllResults([]);
+                });
+        });
+    }
+
+    formEl.addEventListener('submit', function (event) {
+        secondIdsContainer.innerHTML = '';
+        if (mode === 'reimbursement') {
+            var suggestedIds = Array.prototype.map.call(suggestedEl.selectedOptions, function (o) { return o.value; }).filter(Boolean);
+            var lookupIds = allSelectEl
+                ? Array.prototype.map.call(allSelectEl.selectedOptions, function (o) { return o.value; }).filter(Boolean)
+                : [];
+            var selectedIds = Array.from(new Set(suggestedIds.concat(lookupIds)));
+            if (!selectedIds.length) {
+                event.preventDefault();
+                alert('Выберите минимум одну операцию для возврата.');
+                return;
+            }
+            selectedIds.forEach(function (id) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'second_transaction_ids';
+                input.value = id;
+                secondIdsContainer.appendChild(input);
+            });
+        } else {
+            var selectedId = (allSelectEl && allSelectEl.value) ? allSelectEl.value : suggestedEl.value;
+            if (!selectedId) {
+                event.preventDefault();
+                alert('Выберите вторую транзакцию для связки.');
+                return;
+            }
+            var single = document.createElement('input');
+            single.type = 'hidden';
+            single.name = 'second_transaction_id';
+            single.value = selectedId;
+            secondIdsContainer.appendChild(single);
+        }
+    });
+});
+</script>
+{% endblock %}

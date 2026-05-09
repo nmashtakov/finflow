@@ -5,7 +5,11 @@
                 <div class="sidenav-menu-heading">Меню</div>
                 <a class="nav-link" href="{% url 'dashboard' %}">
                     <div class="nav-link-icon"><i data-feather="activity"></i></div>
-                    Панель управления
+                    Аналитика
+                </a>
+                <a class="nav-link" href="{% url 'forecasting:month-summary' %}">
+                    <div class="nav-link-icon"><i data-feather="trending-up"></i></div>
+                    Прогноз
                 </a>
                 <a class="nav-link" href="{% url 'transactions:list' %}">
                     <div class="nav-link-icon"><i data-feather="dollar-sign"></i></div>
@@ -25,6 +29,35 @@
                 <a class="nav-link" href="{% url 'accounts_directory' %}">
                     <div class="nav-link-icon"><i data-feather="credit-card"></i></div>
                     Счета
+                </a>
+                <a class="nav-link" href="{% url 'transactions:rules' %}">
+                    <div class="nav-link-icon"><i data-feather="sliders"></i></div>
+                    Правила разметки
+                </a>
+                <a class="nav-link" href="{% url 'transactions:links' %}">
+                    <div class="nav-link-icon"><i data-feather="link-2"></i></div>
+                    Связки операций
+                </a>
+                <a class="nav-link" href="{% url 'transactions:bybit-connections' %}">
+                    <div class="nav-link-icon"><i data-feather="key"></i></div>
+                    API подключения
+                </a>
+                <a class="nav-link" href="{% url 'transactions:bybit' %}">
+                    <div class="nav-link-icon"><i data-feather="cloud"></i></div>
+                    Bybit staging
+                </a>
+                <div class="sidenav-menu-heading">Валюты</div>
+                <a class="nav-link" href="{% url 'currencies_directory' %}">
+                    <div class="nav-link-icon"><i data-feather="globe"></i></div>
+                    Активность валют
+                </a>
+                <a class="nav-link" href="{% url 'currency_rates' %}">
+                    <div class="nav-link-icon"><i data-feather="trending-up"></i></div>
+                    Курсы валют
+                </a>
+                <a class="nav-link" href="{% url 'currency_converter' %}">
+                    <div class="nav-link-icon"><i data-feather="repeat"></i></div>
+                    Конвертер валют
                 </a>
                 <div class="sidenav-menu-heading">Дополнительно</div>
                 {% if user.is_superuser %}

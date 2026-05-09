@@ -4,7 +4,10 @@
 
 {% block content %}
 <div class="container-fluid px-4">
-    <h1 class="mt-4">Импорт транзакций</h1>
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <h1 class="mb-0">Импорт транзакций</h1>
+        <a href="{% url 'transactions:import-sessions' %}" class="btn btn-outline-secondary">Сессии разметки</a>
+    </div>
     <p class="text-muted mb-4">Загрузите CSV или Excel, сопоставьте столбцы с полями FinFlow и импортируйте операции.</p>
 
     {% if step == 'upload' %}
@@ -27,6 +30,17 @@
                     {{ upload_form.bank_preset.label_tag }}
                     {{ upload_form.bank_preset }}
                 </div>
+                <div class="col-12 d-none" id="tinkoffInvestRoundingOption">
+                    <div class="form-check">
+                        {{ upload_form.include_tinkoff_invest_rounding }}
+                        <label class="form-check-label" for="{{ upload_form.include_tinkoff_invest_rounding.id_for_label }}">
+                            {{ upload_form.include_tinkoff_invest_rounding.label }}
+                        </label>
+                    </div>
+                    <div class="form-text">
+                        Значение из колонки «Округление на инвесткопилку» будет создано отдельной операцией.
+                    </div>
+                </div>
                 <div class="col-12">
                     <button type="submit" class="btn btn-primary">Загрузить</button>
                     <a href="{% url 'transactions:list' %}" class="btn btn-outline-secondary">Отмена</a>
@@ -36,7 +50,7 @@
     </div>
 
     <div class="alert alert-info">
-        <strong>Совет:</strong> Поддерживаются выгрузки Тинькофф/Альфа. Убедитесь, что в файле есть строка заголовков.
+        <strong>Совет:</strong> Поддерживаются выгрузки Тинькофф/Альфа/Т Бизнес. Убедитесь, что в файле есть строка заголовков.
     </div>
 
     {% elif step == 'sheet' %}
@@ -113,6 +127,10 @@
             <form method="post" action="?session={{ session.id }}" class="mapping-form">
                 {% csrf_token %}
                 <input type="hidden" name="step" value="mapping">
+
+                <div class="alert alert-info mb-4">
+                    Для типовой выгрузки поля обычно уже сопоставлены автоматически. Обычно вручную нужно проверить только счёт и нажать «Импортировать».
+                </div>
 
                 {% if mapping_form.non_field_errors %}
                     <div class="alert alert-danger mb-4">
@@ -228,11 +246,11 @@
                         </div>
 
                         <div class="col-12 col-lg-6">
-                            <div class="mapping-card" data-mapping-field="column_category" data-required="true">
+                            <div class="mapping-card" data-mapping-field="column_category">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="mapping-card__title">Категория</div>
-                                        <small class="text-muted">Будет создана, если отсутствует.</small>
+                                        <small class="text-muted">Необязательно: используется как категория источника для правил.</small>
                                     </div>
                                     <span class="badge bg-light text-muted" data-mapping-badge>Не выбрано</span>
                                 </div>
@@ -337,11 +355,126 @@
     {{ auto_mapping|json_script:"auto-mapping-data" }}
     {{ column_samples|json_script:"column-samples-data" }}
 
+    {% elif step == 'bank_account' %}
+    <div class="card mb-4">
+        <div class="card-header">Выгрузка {{ bank_label|default:"банка" }}: выбор счёта</div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Для этой выгрузки поля уже сопоставлены автоматически. Выберите счёт, к которому отнести операции.</p>
+            <form method="post" action="?session={{ session.id }}" class="row g-3">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="bank_account">
+                {% if tinkoff_account_form.non_field_errors %}
+                <div class="col-12">
+                    <div class="alert alert-danger mb-0">
+                        {% for error in tinkoff_account_form.non_field_errors %}
+                        <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col-12 col-md-6">
+                    <label class="form-label">{{ tinkoff_account_form.default_account.label }}</label>
+                    {{ tinkoff_account_form.default_account }}
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label">{{ tinkoff_account_form.default_account_name.label }}</label>
+                    {{ tinkoff_account_form.default_account_name }}
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label">{{ tinkoff_account_form.default_currency.label }}</label>
+                    {{ tinkoff_account_form.default_currency }}
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <a href="{% url 'transactions:import' %}" class="btn btn-outline-secondary">Назад</a>
+                    <button type="submit" class="btn btn-primary">Импортировать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {% elif step == 'result' %}
     <div class="card mb-4">
         <div class="card-body">
             <h2 class="h5">Импорт завершён</h2>
-            <p class="mb-3">Создано транзакций: <strong>{{ result.created }}</strong></p>
+            {% if session %}
+            <div class="row g-2 mb-3">
+                <div class="col-12 col-md-4">
+                    <div class="small text-muted">Статус</div>
+                    <div><strong>{{ session.status }}</strong></div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="small text-muted">Версия normalizer</div>
+                    <div><strong>{{ session.normalizer_version|default:"—" }}</strong></div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="small text-muted">Всего строк</div>
+                    <div><strong>{{ session.total_rows }}</strong></div>
+                </div>
+            </div>
+            {% endif %}
+            <p class="mb-1">Нормализовано операций: <strong>{{ result.normalized|default:0 }}</strong></p>
+            <p class="mb-1">Автоматически размечено: <strong>{{ result.matched|default:0 }}</strong></p>
+            <p class="mb-1">Требуют проверки: <strong>{{ result.needs_review|default:0 }}</strong></p>
+            <p class="mb-1">Дубликатов в текущей сессии: <strong>{{ result.duplicates|default:0 }}</strong></p>
+            {% if result.restored_duplicates %}
+            <p class="mb-1">Возвращено из дублей: <strong>{{ result.restored_duplicates }}</strong></p>
+            {% endif %}
+            <p class="mb-3">Пропущено (служебные): <strong>{{ result.skipped|default:0 }}</strong></p>
+            {% if duplicate_candidates %}
+            <div class="card border-warning mb-3">
+                <div class="card-header bg-warning bg-opacity-10">
+                    Возможные дубли
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Эти строки похожи на уже найденные операции в этой же сессии. Если это реальные повторяющиеся платежи, отметьте их и верните в импорт.
+                    </p>
+                    <form method="post" action="?session={{ session.id }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="step" value="restore_duplicates">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 36px;"></th>
+                                        <th>Строка</th>
+                                        <th>Дата</th>
+                                        <th>Сумма</th>
+                                        <th>Валюта</th>
+                                        <th>Описание</th>
+                                        <th>External ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for duplicate in duplicate_candidates %}
+                                    <tr>
+                                        <td>
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                name="duplicate_indices"
+                                                value="{{ duplicate.index }}"
+                                                {% if duplicate.index in confirmed_duplicate_indices %}checked disabled{% endif %}
+                                            >
+                                        </td>
+                                        <td>{{ duplicate.index }}</td>
+                                        <td>{{ duplicate.occurred_at|default:"—" }}</td>
+                                        <td>{{ duplicate.amount|default:"—" }}</td>
+                                        <td>{{ duplicate.currency|default:"—" }}</td>
+                                        <td>{{ duplicate.original_description|default:duplicate.description_norm|default:"—" }}</td>
+                                        <td>{{ duplicate.external_id|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary">
+                            Вернуть отмеченные в импорт
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
             {% if result.errors %}
             <div class="alert alert-warning">
                 <p class="mb-2">Некоторые строки не удалось обработать ({{ result.errors|length }}):</p>
@@ -357,6 +490,7 @@
             <div class="d-flex flex-wrap gap-2 mt-3">
                 {% if session %}
                 <a href="{% url 'transactions:import' %}?session={{ session.id }}" class="btn btn-primary">Исправить ошибки</a>
+                <a href="{% url 'transactions:review' %}?session={{ session.id }}" class="btn btn-outline-primary">Перейти к проверке</a>
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="step" value="discard">
@@ -365,19 +499,41 @@
                 {% endif %}
             </div>
             {% else %}
-            <div class="alert alert-success mb-3">Все строки импортированы успешно.</div>
+            {% if result.needs_review|default:0 > 0 %}
+            <div class="alert alert-warning mb-3">
+                Импорт завершён. Есть нераспознанные операции — откройте review и разметьте их перед финализацией.
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-3">Все строки импортированы и автоматически размечены.</div>
+            {% endif %}
+            {% if session %}
+            <a href="{% url 'transactions:review' %}?session={{ session.id }}" class="btn btn-primary">
+                {% if result.needs_review|default:0 > 0 %}Открыть review (обязательно){% else %}Открыть review{% endif %}
+            </a>
+            {% endif %}
             {% endif %}
         </div>
     </div>
-
-    <a href="{% url 'transactions:list' %}" class="btn btn-primary">Вернуться к списку транзакций</a>
-    <a href="{% url 'transactions:import' %}" class="btn btn-outline-secondary ms-2">Импортировать ещё</a>
 
     {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const bankPresetSelect = document.getElementById('id_bank_preset');
+        const investRoundingOption = document.getElementById('tinkoffInvestRoundingOption');
+        const toggleInvestRoundingOption = () => {
+            if (!bankPresetSelect || !investRoundingOption) return;
+            investRoundingOption.classList.toggle('d-none', bankPresetSelect.value !== 'tinkoff');
+        };
+        if (bankPresetSelect) {
+            bankPresetSelect.addEventListener('change', toggleInvestRoundingOption);
+            toggleInvestRoundingOption();
+        }
+    });
+</script>
 {% if step == 'sheet' %}
 <style>
     .sheet-option {

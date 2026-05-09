@@ -1,0 +1,99 @@
+{% extends "components/base.html" %}
+
+{% block title %}Правила категоризации{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Правила категоризации</h1>
+            <p class="text-muted mb-0">Пользовательские правила для авторазметки импортов.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'transactions:import-sessions' %}">К сессиям импорта</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2">
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Источник</label>
+                    <select class="form-select" name="source">
+                        <option value="">Все</option>
+                        {% for source in sources %}
+                        <option value="{{ source.code }}" {% if source_code == source.code %}selected{% endif %}>{{ source.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Статус</label>
+                    <select class="form-select" name="is_active">
+                        <option value="" {% if not is_active %}selected{% endif %}>Все</option>
+                        <option value="1" {% if is_active == '1' %}selected{% endif %}>Только активные</option>
+                        <option value="0" {% if is_active == '0' %}selected{% endif %}>Только неактивные</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">Применить</button>
+                    <a href="{% url 'transactions:rules' %}" class="btn btn-outline-secondary">Сбросить</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Источник</th>
+                        <th>Условия</th>
+                        <th>Действие</th>
+                        <th>Приоритет</th>
+                        <th>Confidence</th>
+                        <th>Статус</th>
+                        <th>Обновлено</th>
+                        <th class="text-end">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td>{{ rule.id }}</td>
+                        <td>{{ rule.name }}</td>
+                        <td>{{ rule.source }}</td>
+                        <td>{{ rule.conditions }}</td>
+                        <td>{{ rule.target }}</td>
+                        <td>{{ rule.priority }}</td>
+                        <td>{{ rule.confidence }}</td>
+                        <td>
+                            {% if rule.is_active %}
+                            <span class="badge bg-success">Активно</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Отключено</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ rule.updated_at|date:"d.m.Y H:i" }}</td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'transactions:rule-delete' rule.id %}" class="d-inline" onsubmit="return confirm('Удалить это правило?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="source" value="{{ source_code }}">
+                                <input type="hidden" name="is_active" value="{{ is_active }}">
+                                <button type="submit" class="btn btn-datatable btn-icon btn-transparent-dark text-danger" title="Удалить правило" aria-label="Удалить правило">
+                                    <i data-feather="trash-2"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">Правил пока нет.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

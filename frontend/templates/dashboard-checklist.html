@@ -1,0 +1,119 @@
+{% extends "components/base.html" %}
+
+{% block title %}Чек-лист периода{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Чек-лист периода</h1>
+            <p class="text-muted mb-0">Проверка импорта, связок и сверки перед закрытием очередного периода.</p>
+        </div>
+        <a href="{% url 'dashboard' %}?start={{ filters.start }}&end={{ filters.end }}" class="btn btn-outline-secondary">Вернуться в аналитику</a>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <form method="get" class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label text-muted small text-uppercase">Дата с</label>
+                    <input type="date" class="form-control" name="start" value="{{ filters.start }}">
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label text-muted small text-uppercase">Дата по</label>
+                    <input type="date" class="form-control" name="end" value="{{ filters.end }}">
+                </div>
+                <div class="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+                    <button type="submit" class="btn btn-primary">Применить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-4">
+        {% for item in checklist_items %}
+        <div class="col-12 col-xl-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="fw-semibold">{{ item.title }}</div>
+                        {% if item.status == 'ok' %}
+                        <span class="badge bg-success">Ок</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Проверить</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted small mb-3">{{ item.summary }}</div>
+                    <a href="{{ item.action_url }}" class="btn btn-sm btn-outline-primary">{{ item.action_label }}</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-transparent">
+            <h6 class="mb-0">Активные счета</h6>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Фиксация считается актуальной, если она не старше последней операции по счету в выбранном периоде.</p>
+            {% if period_account_activity %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Счёт</th>
+                            <th>Статус периода</th>
+                            <th>Валюты в периоде</th>
+                            <th>Последняя операция вообще</th>
+                            <th>Фиксация баланса</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in period_account_activity %}
+                        <tr>
+                            <td class="fw-semibold">{{ row.account.name }}</td>
+                            <td>
+                                {% if row.has_period_activity %}
+                                <span class="badge bg-success">Есть операции</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Нет операций</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.currencies_used %}
+                                    {{ row.currencies_used|join:", " }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                                {% if row.is_multicurrency %}
+                                <span class="badge bg-info text-dark ms-2">Мультивалютный</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ row.last_tx_overall_at }}</td>
+                            <td>
+                                {% if not row.has_period_activity %}
+                                    <span class="text-muted">Не нужна, пока нет движений</span>
+                                {% elif row.latest_snapshot %}
+                                    {{ row.latest_snapshot.snapshot_date|date:"d.m.Y" }}
+                                    {% if row.has_period_snapshot %}
+                                    <span class="badge bg-success ms-2">Актуально</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark ms-2">До {{ row.snapshot_target_date|date:"d.m.Y" }} нужна новая</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">Нет фиксации</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">В выбранном периоде нет операций.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

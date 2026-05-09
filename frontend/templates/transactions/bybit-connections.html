@@ -1,0 +1,100 @@
+{% extends "components/base.html" %}
+
+{% block title %}API подключения{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">API подключения</h1>
+            <p class="text-muted mb-0">Управление ключами API для внешних сервисов. Сейчас доступен Bybit.</p>
+        </div>
+        <a class="btn btn-outline-primary" href="{% url 'transactions:bybit' %}">К Bybit sync</a>
+    </div>
+
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        {% if 'bybit' in message.tags %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-2">
+            {{ message }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header">Bybit</div>
+        <div class="card-body">
+            <form method="post" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_connection">
+                <input type="hidden" name="connection_id" value="{% if selected_connection %}{{ selected_connection.id }}{% endif %}">
+                <div class="col-md-3">
+                    <label class="form-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                    {{ form.name }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="{{ form.api_key.id_for_label }}">{{ form.api_key.label }}</label>
+                    {{ form.api_key }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="{{ form.api_secret.id_for_label }}">{{ form.api_secret.label }}</label>
+                    {{ form.api_secret }}
+                </div>
+                <div class="col-md-1">
+                    <div class="form-check mt-4">
+                        {{ form.is_testnet }}
+                        <label class="form-check-label" for="{{ form.is_testnet.id_for_label }}">Testnet</label>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <div class="form-check mt-4">
+                        {{ form.is_active }}
+                        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">Активно</label>
+                    </div>
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+            <small class="text-muted d-block mt-2">Testnet — тестовая среда Bybit (небоевые данные и отдельные API-ключи).</small>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Сохраненные подключения Bybit</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Название</th>
+                            <th>Режим</th>
+                            <th>Статус</th>
+                            <th>Последний sync</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in connections %}
+                        <tr>
+                            <td>#{{ item.id }}</td>
+                            <td>{{ item.name }}</td>
+                            <td>{% if item.is_testnet %}Testnet{% else %}Mainnet{% endif %}</td>
+                            <td>{% if item.is_active %}<span class="badge bg-success">Активно</span>{% else %}<span class="badge bg-secondary">Отключено</span>{% endif %}</td>
+                            <td>{% if item.last_sync_at %}{{ item.last_sync_at|date:"d.m.Y H:i" }}{% else %}-{% endif %}</td>
+                            <td><a class="btn btn-sm btn-outline-primary" href="?connection={{ item.id }}">Редактировать</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">Подключений пока нет.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

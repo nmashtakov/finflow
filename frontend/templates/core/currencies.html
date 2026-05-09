@@ -1,0 +1,129 @@
+{% extends "components/base.html" %}
+
+{% block title %}Справочники — Валюты{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Активность валют</h1>
+            <p class="text-muted mb-0">Управляйте тем, какие валюты доступны для выбора в системе.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post" id="currenciesForm">
+                {% csrf_token %}
+                <input type="hidden" name="save_currencies" value="1">
+                <div class="table-responsive">
+                    <table id="currenciesTable" class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">Активна</th>
+                                <th style="width: 120px;">Код</th>
+                                <th>Название (EN)</th>
+                                <th>Название (RU)</th>
+                                <th style="width: 160px;">Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for currency in currencies %}
+                            <tr>
+                                <td>
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="active_codes"
+                                        value="{{ currency.code }}"
+                                        {% if currency.status == 'active' %}checked{% endif %}
+                                    >
+                                </td>
+                                <td><strong>{{ currency.code }}</strong></td>
+                                <td>{{ currency.name }}</td>
+                                <td>{{ currency.russian_name }}</td>
+                                <td data-order="{% if currency.status == 'active' %}1{% else %}0{% endif %}">
+                                    {% if currency.status == 'active' %}
+                                        <span class="badge bg-success">Активна</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">В архиве</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">Справочник валют пуст.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let currenciesTable = null;
+        if (window.$ && $.fn.DataTable) {
+            currenciesTable = $('#currenciesTable').DataTable({
+                language: {
+                    search: "Поиск:",
+                    lengthMenu: "Показать _MENU_ записей",
+                    info: "Показано _START_-_END_ из _TOTAL_ записей",
+                    paginate: {
+                        first: "Первая",
+                        last: "Последняя",
+                        next: "Следующая",
+                        previous: "Предыдущая"
+                    },
+                    zeroRecords: "Совпадений не найдено",
+                    infoEmpty: "Нет записей для отображения"
+                },
+                pageLength: 25,
+                ordering: true,
+                paging: true,
+                searching: true,
+                info: true,
+                order: [[4, 'desc'], [1, 'asc']],
+                columnDefs: [
+                    { orderable: false, targets: [0] }
+                ]
+            });
+        }
+
+        const form = document.getElementById('currenciesForm');
+        if (form && currenciesTable) {
+            form.addEventListener('submit', function () {
+                // DataTables держит часть строк вне текущего DOM страницы,
+                // поэтому перед отправкой собираем чекбоксы по всей таблице.
+                form.querySelectorAll('input[name="active_codes"][data-dt-generated="1"]').forEach(function (el) {
+                    el.remove();
+                });
+                currenciesTable.$('input[name="active_codes"]:checked').each(function () {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'active_codes';
+                    hidden.value = this.value;
+                    hidden.setAttribute('data-dt-generated', '1');
+                    form.appendChild(hidden);
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "components/base.html" %}
+
+{% block title %}Курсы валют{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Курсы валют</h1>
+            <p class="text-muted mb-0">Официальные курсы ЦБ РФ, сохраненные по дням.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12">
+                    <form method="post" class="currency-rate-sync-form row g-3 align-items-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="sync_full">
+                        <div class="col-12 col-xl-5">
+                            <label class="form-label">Что загружать</label>
+                            <select class="form-select" name="target_selection">
+                                <option value="ACTIVE" {% if target_selection == 'ACTIVE' %}selected{% endif %}>Все активные валюты</option>
+                                {% for currency in currency_choices %}
+                                <option value="{{ currency.code }}" {% if target_selection == currency.code %}selected{% endif %}>{{ currency.code }} — {{ currency.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4 col-xl-3">
+                            <label class="form-label">Дата с</label>
+                            <input type="date" class="form-control" name="start_date" value="{{ start_date_value }}">
+                        </div>
+                        <div class="col-12 col-md-8 col-xl-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary w-100">Первичная загрузка</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 border rounded-3 px-3 py-3">
+                        <div>
+                            <h5 class="mb-1">Догрузка новых дат</h5>
+                            <p class="text-muted mb-0">Обновляет только активные валюты, начиная с последней сохраненной даты по каждой из них.</p>
+                        </div>
+                        <form method="post" class="currency-rate-sync-form d-flex align-items-center">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="sync_incremental">
+                            <button type="submit" class="btn btn-outline-primary">Обновить новые курсы</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="alert alert-info mt-3 mb-0" id="currencyRateSyncNotice" style="display:none;">
+                Загрузка запущена. Не закрывай страницу: курсы подтягиваются по выбранным валютам напрямую с ЦБ РФ.
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="mb-3">Покрытие по валютам</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Код</th>
+                            <th>Название</th>
+                            <th>Статус</th>
+                            <th>Первая дата курса</th>
+                            <th>Последняя дата курса</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for currency in currency_rows %}
+                        <tr>
+                            <td><strong>{{ currency.code }}</strong></td>
+                            <td>{{ currency.name }}</td>
+                            <td>
+                                <span class="badge bg-success">Активна</span>
+                            </td>
+                            <td>
+                                {% if currency.first_date %}
+                                    {{ currency.first_date|date:"d.m.Y" }}
+                                {% else %}
+                                    <span class="text-muted">Нет курсов</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if currency.latest_date %}
+                                    {{ currency.latest_date|date:"d.m.Y" }}
+                                {% else %}
+                                    <span class="text-muted">Нет курсов</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="mb-3">Последние загруженные курсы</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Валюта</th>
+                            <th class="text-end">Курс к RUB</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rate in recent_rates %}
+                        <tr>
+                            <td>{{ rate.date|date:"d.m.Y" }}</td>
+                            <td>{{ rate.currency }}</td>
+                            <td class="text-end">{{ rate.amount }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">Курсы еще не загружены.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if recent_rates.paginator.num_pages > 1 %}
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="text-muted small">
+                    Страница {{ recent_rates.number }} из {{ recent_rates.paginator.num_pages }}
+                </div>
+                <nav aria-label="Пагинация последних курсов">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item {% if not recent_rates.has_previous %}disabled{% endif %}">
+                            <a class="page-link" href="?rates_page={% if recent_rates.has_previous %}{{ recent_rates.previous_page_number }}{% else %}1{% endif %}">Назад</a>
+                        </li>
+                        {% for page_num in recent_rates.paginator.page_range %}
+                            {% if page_num == recent_rates.number %}
+                            <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                            {% elif page_num >= recent_rates.number|add:'-2' and page_num <= recent_rates.number|add:'2' %}
+                            <li class="page-item"><a class="page-link" href="?rates_page={{ page_num }}">{{ page_num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not recent_rates.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="?rates_page={% if recent_rates.has_next %}{{ recent_rates.next_page_number }}{% else %}{{ recent_rates.paginator.num_pages }}{% endif %}">Вперед</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const forms = document.querySelectorAll('.currency-rate-sync-form');
+        const notice = document.getElementById('currencyRateSyncNotice');
+        forms.forEach(function (form) {
+            form.addEventListener('submit', function () {
+                if (notice) {
+                    notice.style.display = 'block';
+                }
+                const button = form.querySelector('button[type="submit"]');
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Загрузка...';
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

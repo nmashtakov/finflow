@@ -101,6 +101,14 @@ class Transaction(models.Model):
     transaction_type = models.CharField(max_length=16, choices=TRANSACTION_TYPE_CHOICES)
     comment = models.TextField(blank=True, null=True)
     related_transaction = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
+    parent_transaction = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='split_children',
+    )
+    is_split_parent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -152,3 +160,66 @@ class UserPreferences(models.Model):
 
     def __str__(self):
         return f"Настройки пользователя {self.user.username}"
+
+
+class TransactionLinkGroup(models.Model):
+    class LinkType(models.TextChoices):
+        REIMBURSEMENT = ("reimbursement", "Возврат")
+        TRANSFER_PAIR = ("transfer_pair", "Перевод между счетами")
+        EXCHANGE_PAIR = ("exchange_pair", "Обмен")
+
+    class Status(models.TextChoices):
+        ACTIVE = ("active", "Активна")
+        ARCHIVED = ("archived", "В архиве")
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transaction_link_groups")
+    link_type = models.CharField(max_length=32, choices=LinkType.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    note = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.get_link_type_display()} #{self.id}"
+
+
+class TransactionLinkItem(models.Model):
+    class Role(models.TextChoices):
+        PRIMARY = ("primary", "Основная")
+        OFFSET = ("offset", "Компенсация")
+        OUTGOING = ("outgoing", "Исходящая")
+        INCOMING = ("incoming", "Входящая")
+
+    group = models.ForeignKey(TransactionLinkGroup, on_delete=models.CASCADE, related_name="items")
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="link_items")
+    role = models.CharField(max_length=16, choices=Role.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["group", "transaction"], name="uniq_group_transaction_item"),
+            models.UniqueConstraint(fields=["transaction"], name="uniq_transaction_link_item"),
+        ]
+
+    def __str__(self):
+        return f"{self.group_id}: {self.transaction_id} ({self.role})"
+
+
+class AccountBalanceSnapshot(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='balance_snapshots')
+    snapshot_date = models.DateField()
+    balance = models.DecimalField(max_digits=20, decimal_places=8)
+    note = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-snapshot_date', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['account', 'snapshot_date'], name='uniq_account_snapshot_date'),
+        ]
+
+    def __str__(self):
+        return f"{self.account} @ {self.snapshot_date}: {self.balance}"
