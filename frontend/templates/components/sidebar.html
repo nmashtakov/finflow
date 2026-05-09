@@ -1,72 +1,31 @@
 <div id="layoutSidenav_nav">
     <nav class="sidenav shadow-right sidenav-light">
         <div class="sidenav-menu">
-            <div class="nav accordion" id="accordionSidenav">
-                <div class="sidenav-menu-heading">Меню</div>
-                <a class="nav-link" href="{% url 'dashboard' %}">
-                    <div class="nav-link-icon"><i data-feather="activity"></i></div>
-                    Аналитика
-                </a>
-                <a class="nav-link" href="{% url 'forecasting:month-summary' %}">
-                    <div class="nav-link-icon"><i data-feather="trending-up"></i></div>
-                    Прогноз
-                </a>
-                <a class="nav-link" href="{% url 'transactions:list' %}">
-                    <div class="nav-link-icon"><i data-feather="dollar-sign"></i></div>
-                    Транзакции
-                </a>
-                {% if user.is_superuser %}
-                <a class="nav-link" href="{% url 'user-list' %}">
-                    <div class="nav-link-icon"><i data-feather="bar-chart-2"></i></div>
-                    Пользователи
-                </a>
-                {% endif %}
-                <div class="sidenav-menu-heading">Настройки</div>
-                <a class="nav-link" href="{% url 'categories_settings' %}">
-                    <div class="nav-link-icon"><i data-feather="folder"></i></div>
-                    Проекты и категории
-                </a>
-                <a class="nav-link" href="{% url 'accounts_directory' %}">
-                    <div class="nav-link-icon"><i data-feather="credit-card"></i></div>
-                    Счета
-                </a>
-                <a class="nav-link" href="{% url 'transactions:rules' %}">
-                    <div class="nav-link-icon"><i data-feather="sliders"></i></div>
-                    Правила разметки
-                </a>
-                <a class="nav-link" href="{% url 'transactions:links' %}">
-                    <div class="nav-link-icon"><i data-feather="link-2"></i></div>
-                    Связки операций
-                </a>
-                <a class="nav-link" href="{% url 'transactions:bybit-connections' %}">
-                    <div class="nav-link-icon"><i data-feather="key"></i></div>
-                    API подключения
-                </a>
-                <a class="nav-link" href="{% url 'transactions:bybit' %}">
-                    <div class="nav-link-icon"><i data-feather="cloud"></i></div>
-                    Bybit staging
-                </a>
-                <div class="sidenav-menu-heading">Валюты</div>
-                <a class="nav-link" href="{% url 'currencies_directory' %}">
-                    <div class="nav-link-icon"><i data-feather="globe"></i></div>
-                    Активность валют
-                </a>
-                <a class="nav-link" href="{% url 'currency_rates' %}">
-                    <div class="nav-link-icon"><i data-feather="trending-up"></i></div>
-                    Курсы валют
-                </a>
-                <a class="nav-link" href="{% url 'currency_converter' %}">
-                    <div class="nav-link-icon"><i data-feather="repeat"></i></div>
-                    Конвертер валют
-                </a>
-                <div class="sidenav-menu-heading">Дополнительно</div>
-                {% if user.is_superuser %}
-                <a class="nav-link" href="/admin/" target="_blank" rel="noopener noreferrer">
-                    <div class="nav-link-icon"><i data-feather="settings"></i></div>
-                    Admin панель
-                </a>
-                {% endif %}
+            {% if user.is_authenticated %}
+            <div class="px-3 pt-3 pb-3 border-bottom">
+                <div class="text-xs text-uppercase text-muted fw-700 mb-2">Модули</div>
+                <div class="btn-group w-100" role="group" aria-label="Переключение между модулями">
+                    <a
+                        class="btn btn-sm {% if request.resolver_match.namespace == 'crm' %}btn-outline-primary{% else %}btn-primary{% endif %}"
+                        href="{% url 'dashboard' %}"
+                    >
+                        Финансы
+                    </a>
+                    <a
+                        class="btn btn-sm {% if request.resolver_match.namespace == 'crm' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+                        href="{% url 'crm:dashboard' %}"
+                    >
+                        CRM
+                    </a>
+                </div>
             </div>
+            {% endif %}
+
+            {% if request.resolver_match.namespace == 'crm' %}
+                {% include "components/sidebar_crm.html" %}
+            {% else %}
+                {% include "components/sidebar_finance.html" %}
+            {% endif %}
         </div>
     </nav>
 </div>

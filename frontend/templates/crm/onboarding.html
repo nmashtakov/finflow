@@ -1,0 +1,53 @@
+{% extends "components/base.html" %}
+
+{% block title %}Первый запуск CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8 col-xl-6">
+            <div class="mt-4 mb-4">
+                <h1 class="mb-1">Первый запуск CRM</h1>
+                <p class="text-muted mb-0">Создайте организацию, с которой начнется работа в CRM.</p>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                            {{ form.name }}
+                            {% for error in form.name.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label" for="{{ form.base_currency.id_for_label }}">{{ form.base_currency.label }}</label>
+                            {{ form.base_currency }}
+                            {% for error in form.base_currency.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center gap-3">
+                            <div class="text-muted small">После сохранения вы сразу попадете на главную страницу CRM.</div>
+                            <button type="submit" class="btn btn-primary">Создать организацию</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

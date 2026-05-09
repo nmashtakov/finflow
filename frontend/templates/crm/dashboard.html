@@ -1,0 +1,35 @@
+{% extends "components/base.html" %}
+
+{% block title %}Главная CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Главная CRM</h1>
+            <p class="text-muted mb-0">Текущая организация: {{ organization.name }}</p>
+        </div>
+        <div class="badge bg-light text-dark border fs-6">{{ organization.base_currency }}</div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        {% for title, value in dashboard_cards %}
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <p class="text-muted text-uppercase fw-semibold small mb-1">{{ title }}</p>
+                    <h3 class="mb-0">{{ value }}</h3>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <h5 class="card-title mb-1">Каркас CRM готов</h5>
+            <p class="text-muted mb-0">Следующие сущности CRM должны быть привязаны к организации, а не напрямую к пользователю.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

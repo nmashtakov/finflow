@@ -16,6 +16,7 @@ from core.views import (
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
+    path('crm/', include(('crm.urls', 'crm'), namespace='crm')),
     path('transactions/', include(('transactions.urls', 'transactions'), namespace='transactions')),
     path('forecast/', include(('forecasting.urls', 'forecasting'), namespace='forecasting')),
     path('home/', lambda request: render(request, "error-404-2.html"), name="home"),  # Заглушка для главной
