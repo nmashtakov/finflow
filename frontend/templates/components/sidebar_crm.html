@@ -4,22 +4,18 @@
         <div class="nav-link-icon"><i data-feather="briefcase"></i></div>
         Дашборд
     </a>
-    <a class="nav-link {% if request.resolver_match.url_name == 'onboarding' %}active{% endif %}" href="{% url 'crm:onboarding' %}">
+    <a class="nav-link {% if request.resolver_match.url_name == 'products' or request.resolver_match.url_name == 'product_create' or request.resolver_match.url_name == 'product_edit' %}active{% endif %}" href="{% url 'crm:products' %}">
+        <div class="nav-link-icon"><i data-feather="package"></i></div>
+        Товары
+    </a>
+    <a class="nav-link {% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'sales_channel_create' or request.resolver_match.url_name == 'sales_channel_edit' or request.resolver_match.url_name == 'warehouse_create' or request.resolver_match.url_name == 'warehouse_edit' %}active{% endif %}" href="{% url 'crm:settings' %}">
         <div class="nav-link-icon"><i data-feather="settings"></i></div>
-        Настройка
+        Справочники
     </a>
     <div class="sidenav-menu-heading">Разделы</div>
     <div class="nav-link disabled">
-        <div class="nav-link-icon"><i data-feather="package"></i></div>
-        Товары
-    </div>
-    <div class="nav-link disabled">
         <div class="nav-link-icon"><i data-feather="shopping-bag"></i></div>
         Заказы
-    </div>
-    <div class="nav-link disabled">
-        <div class="nav-link-icon"><i data-feather="archive"></i></div>
-        Склады
     </div>
     <div class="nav-link disabled">
         <div class="nav-link-icon"><i data-feather="clipboard"></i></div>

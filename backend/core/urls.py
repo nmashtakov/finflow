@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from django.shortcuts import render
@@ -30,3 +32,6 @@ urlpatterns = [
     path('settings/currencies/rates/', currency_rates_view, name='currency_rates'),
     path('settings/currencies/converter/', currency_converter_view, name='currency_converter'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

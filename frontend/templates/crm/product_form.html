@@ -1,0 +1,274 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .crm-photo-tile {
+        position: relative;
+        width: 220px;
+        max-width: 100%;
+    }
+    .crm-photo-tile__preview {
+        width: 220px;
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 1rem;
+        border: 1px solid #dfe5ee;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .crm-photo-tile__image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .crm-photo-tile__placeholder {
+        color: #a0a9b8;
+        font-size: 2rem;
+        line-height: 1;
+    }
+    .crm-photo-tile__action {
+        position: absolute;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        width: 2rem;
+        height: 2rem;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.82);
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    .crm-photo-tile__action:hover {
+        background: rgba(17, 24, 39, 0.95);
+    }
+    @media (max-width: 767.98px) {
+        .crm-photo-tile {
+            width: 100%;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">{{ page_title }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <a href="{% url 'crm:products' %}" class="btn btn-outline-secondary">Назад к товарам</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
+                                {{ form.sku }}
+                                {% for error in form.sku.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label class="form-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                                {{ form.name }}
+                                {% for error in form.name.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <div class="crm-photo-tile">
+                                    <div class="crm-photo-tile__preview" data-photo-preview>
+                                        {% if form.instance.photo %}
+                                        <img src="{{ form.instance.photo.url }}" alt="{{ form.instance.name|default:'Фото товара' }}" class="crm-photo-tile__image" data-photo-image>
+                                        {% else %}
+                                        <i class="bi bi-image crm-photo-tile__placeholder" data-photo-placeholder></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="d-none">
+                                        {{ form.photo }}
+                                    </div>
+                                    <button type="button" class="crm-photo-tile__action" data-photo-trigger title="Изменить фото" aria-label="Изменить фото">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                                {% for error in form.photo.errors %}
+                                <div class="text-danger small mt-2">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <div class="card bg-light border-0 h-100">
+                                    <div class="card-body">
+                                        <h6 class="text-uppercase text-muted mb-2">Расчетная себестоимость</h6>
+                                        <div class="fs-4 mb-2">—</div>
+                                        <p class="text-muted small mb-0">Будет рассчитана после добавления закупочных партий.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
+                                {{ form.comment }}
+                                {% for error in form.comment.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+                                </div>
+                                {% for error in form.is_active.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="border-top pt-4 mt-4">
+                            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                                <div>
+                                    <h4 class="mb-1">Размещение и цены</h4>
+                                    <p class="text-muted mb-0">Показываются только активные каналы размещения товара.</p>
+                                </div>
+                            </div>
+
+                            {% if offer_form.channel_rows %}
+                            <div class="row g-3">
+                                {% for row in offer_form.channel_rows %}
+                                <div class="col-12">
+                                    <div class="card border" data-offer-card>
+                                        <div class="card-body">
+                                            <div class="row g-3 align-items-start">
+                                                <div class="col-12 col-lg-3">
+                                                    <h5 class="mb-2">{{ row.channel.name }}</h5>
+                                                    <div class="form-check">
+                                                        {{ row.enabled_field }}
+                                                        <label class="form-check-label" for="{{ row.enabled_field.id_for_label }}">Размещать на канале</label>
+                                                    </div>
+                                                    {% for error in row.enabled_field.errors %}
+                                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col-12 col-lg-3">
+                                                    <label class="form-label" for="{{ row.price_field.id_for_label }}">Цена</label>
+                                                    {{ row.price_field }}
+                                                    {% for error in row.price_field.errors %}
+                                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col-12 col-lg-6">
+                                                    <label class="form-label" for="{{ row.comment_field.id_for_label }}">Комментарий по каналу</label>
+                                                    {{ row.comment_field }}
+                                                    {% for error in row.comment_field.errors %}
+                                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-light border mb-0">
+                                Для текущей организации пока нет активных каналов размещения товара.
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center gap-3 mt-4">
+                            <a href="{% url 'crm:products' %}" class="btn btn-outline-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-offer-card]').forEach(function (card) {
+            const toggle = card.querySelector('input[type="checkbox"]');
+            const priceInput = card.querySelector('input[type="number"]');
+
+            if (!toggle || !priceInput) {
+                return;
+            }
+
+            const syncPriceState = function () {
+                priceInput.disabled = !toggle.checked;
+                priceInput.classList.toggle('bg-light', !toggle.checked);
+            };
+
+            toggle.addEventListener('change', syncPriceState);
+            syncPriceState();
+        });
+
+        const photoInput = document.querySelector('[data-photo-input]');
+        const photoTrigger = document.querySelector('[data-photo-trigger]');
+        const photoPreview = document.querySelector('[data-photo-preview]');
+
+        if (photoInput && photoTrigger) {
+            photoTrigger.addEventListener('click', function () {
+                photoInput.click();
+            });
+        }
+
+        if (photoInput && photoPreview) {
+            photoInput.addEventListener('change', function () {
+                const file = photoInput.files && photoInput.files.length ? photoInput.files[0] : null;
+                if (!file) {
+                    return;
+                }
+
+                const existingImage = photoPreview.querySelector('[data-photo-image]');
+                const placeholder = photoPreview.querySelector('[data-photo-placeholder]');
+                const nextUrl = URL.createObjectURL(file);
+
+                if (placeholder) {
+                    placeholder.remove();
+                }
+
+                if (existingImage) {
+                    existingImage.src = nextUrl;
+                    return;
+                }
+
+                const image = document.createElement('img');
+                image.src = nextUrl;
+                image.alt = 'Предпросмотр фото товара';
+                image.className = 'crm-photo-tile__image';
+                image.setAttribute('data-photo-image', 'true');
+                photoPreview.appendChild(image);
+            });
+        }
+    });
+</script>
+{% endblock %}

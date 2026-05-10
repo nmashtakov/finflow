@@ -11,3 +11,5 @@ DATABASES = {
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.MD5PasswordHasher',
 ]
+
+MEDIA_ROOT = '/tmp/finflow-test-media'

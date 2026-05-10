@@ -1,0 +1,149 @@
+{% extends "components/base.html" %}
+
+{% block title %}Товары CRM{% endblock %}
+
+{% block extra_css %}
+<style>
+    .crm-product-thumb {
+        width: 72px;
+        height: 72px;
+        border-radius: 0.875rem;
+        border: 1px solid #d9e2ef;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .crm-product-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .crm-product-thumb__empty {
+        color: #7d8796;
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Товары</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <a href="{% url 'crm:product_create' %}" class="btn btn-primary">Добавить товар</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Поиск по SKU / артикулу</label>
+                    <input type="text" name="sku" value="{{ filters.sku }}" class="form-control" placeholder="Например, 75192">
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Поиск по названию</label>
+                    <input type="text" name="name" value="{{ filters.name }}" class="form-control" placeholder="Например, UCS">
+                </div>
+                <div class="col-12 col-md-4 d-flex gap-2">
+                    <a href="{% url 'crm:products' %}" class="btn btn-outline-secondary">Сбросить</a>
+                    <button type="submit" class="btn btn-primary">Найти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 88px;">Фото</th>
+                            <th>SKU / артикул</th>
+                            <th>Название</th>
+                            <th>Статус</th>
+                            <th>Каналы</th>
+                            <th>Цены</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr {% if not product.is_active %}class="text-muted"{% endif %}>
+                            <td>
+                                <div class="crm-product-thumb">
+                                {% if product.photo %}
+                                <img
+                                    src="{{ product.photo.url }}"
+                                    alt="{{ product.name }}"
+                                >
+                                {% else %}
+                                <div class="crm-product-thumb__empty">
+                                    —
+                                </div>
+                                {% endif %}
+                                </div>
+                            </td>
+                            <td><strong>{{ product.sku }}</strong></td>
+                            <td>
+                                <div>{{ product.name }}</div>
+                                {% if product.comment %}
+                                <div class="text-muted small">{{ product.comment|truncatechars:90 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if product.is_active %}
+                                <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                <span class="badge bg-secondary">В архиве</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for offer in product.enabled_listing_offers %}
+                                <span class="badge bg-primary-soft text-primary mb-1">{{ offer.channel.name }}</span>
+                                {% empty %}
+                                <span class="text-muted">Не размещен</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% for offer in product.enabled_listing_offers %}
+                                <div>{{ offer.channel.name }}: {{ offer.price }}</div>
+                                {% empty %}
+                                <span class="text-muted">—</span>
+                                {% endfor %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'crm:product_edit' product.id %}" class="btn btn-outline-secondary btn-sm">Редактировать</a>
+                                {% if product.is_active %}
+                                <form method="post" action="{% url 'crm:product_archive' product.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">В архив</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">Товаров пока нет.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
