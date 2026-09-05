@@ -1,5 +1,4 @@
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 import pandas as pd
@@ -10,11 +9,21 @@ from django.shortcuts import render
 from core.models import Currency, Project
 
 from .services import (
+    DEFAULT_INTERPRETATION_AVG_THRESHOLD,
+    DEFAULT_INTERPRETATION_DELTA_THRESHOLD,
+    DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD,
     build_file_month_report,
     build_month_report,
     get_available_months,
     get_available_months_from_rows,
+    normalize_anomaly_history_window,
+    normalize_anomaly_min_history_months,
+    normalize_anomaly_threshold,
     normalize_budget_window,
+    normalize_regular_active_share,
+    normalize_regular_cv,
+    normalize_regular_history_months,
+    normalize_percent_threshold,
     parse_report_date,
     save_budget_plan,
 )
@@ -66,6 +75,14 @@ def month_summary(request):
     month_param = (request.GET.get('month') or request.POST.get('month') or '').strip()
     report_currency = (request.GET.get('report_currency') or request.POST.get('report_currency') or 'RUB').strip().upper()
     threshold_param = (request.GET.get('threshold') or request.POST.get('threshold') or '2.0').replace(',', '.')
+    interpretation_delta_param = (request.GET.get('interpretation_delta_threshold') or request.POST.get('interpretation_delta_threshold') or '').replace(',', '.')
+    interpretation_avg_param = (request.GET.get('interpretation_avg_threshold') or request.POST.get('interpretation_avg_threshold') or '').replace(',', '.')
+    interpretation_risk_param = (request.GET.get('interpretation_risk_share_threshold') or request.POST.get('interpretation_risk_share_threshold') or '').replace(',', '.')
+    regular_min_history_param = request.GET.get('regular_min_history_months') or request.POST.get('regular_min_history_months')
+    regular_min_active_share_param = (request.GET.get('regular_min_active_share') or request.POST.get('regular_min_active_share') or '').replace(',', '.')
+    regular_max_cv_param = (request.GET.get('regular_max_cv') or request.POST.get('regular_max_cv') or '').replace(',', '.')
+    anomaly_history_window_param = request.GET.get('anomaly_history_window') or request.POST.get('anomaly_history_window')
+    anomaly_min_history_param = request.GET.get('anomaly_min_history_months') or request.POST.get('anomaly_min_history_months')
     selected_dimension = (request.GET.get('dimension') or request.POST.get('dimension') or 'category').strip()
     budget_window = normalize_budget_window(request.GET.get('budget_window') or request.POST.get('budget_window'))
     if selected_dimension not in {'category', 'subcategory'}:
@@ -79,11 +96,27 @@ def month_summary(request):
         except ValueError:
             selected_month = None
 
-    try:
-        anomaly_threshold = Decimal(threshold_param)
-    except (InvalidOperation, TypeError):
-        anomaly_threshold = Decimal('2.0')
-    anomaly_threshold = min(max(anomaly_threshold, Decimal('0')), Decimal('4.0'))
+    anomaly_threshold = normalize_anomaly_threshold(threshold_param)
+    anomaly_history_window = normalize_anomaly_history_window(anomaly_history_window_param)
+    anomaly_min_history_months = normalize_anomaly_min_history_months(
+        anomaly_min_history_param,
+        anomaly_history_window,
+    )
+    regular_min_history_months = normalize_regular_history_months(regular_min_history_param)
+    regular_min_active_share = normalize_regular_active_share(regular_min_active_share_param)
+    regular_max_cv = normalize_regular_cv(regular_max_cv_param)
+    interpretation_delta_threshold = normalize_percent_threshold(
+        interpretation_delta_param,
+        DEFAULT_INTERPRETATION_DELTA_THRESHOLD,
+    )
+    interpretation_avg_threshold = normalize_percent_threshold(
+        interpretation_avg_param,
+        DEFAULT_INTERPRETATION_AVG_THRESHOLD,
+    )
+    interpretation_risk_share_threshold = normalize_percent_threshold(
+        interpretation_risk_param,
+        DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD,
+    )
 
     projects = Project.objects.filter(user=request.user, status='active').order_by('name')
     selected_project = _select_project(request.user, request.GET.get('project') or request.POST.get('project'))
@@ -99,6 +132,14 @@ def month_summary(request):
             selected_month=selected_month,
             report_currency=report_currency,
             anomaly_threshold=anomaly_threshold,
+            anomaly_history_window=anomaly_history_window,
+            anomaly_min_history_months=anomaly_min_history_months,
+            regular_min_history_months=regular_min_history_months,
+            regular_min_active_share=regular_min_active_share,
+            regular_max_cv=regular_max_cv,
+            interpretation_delta_threshold=interpretation_delta_threshold,
+            interpretation_avg_threshold=interpretation_avg_threshold,
+            interpretation_risk_share_threshold=interpretation_risk_share_threshold,
             dimension=selected_dimension,
             budget_distribution_window=budget_window,
         )
@@ -108,6 +149,14 @@ def month_summary(request):
             selected_month=selected_month,
             report_currency=report_currency,
             anomaly_threshold=anomaly_threshold,
+            anomaly_history_window=anomaly_history_window,
+            anomaly_min_history_months=anomaly_min_history_months,
+            regular_min_history_months=regular_min_history_months,
+            regular_min_active_share=regular_min_active_share,
+            regular_max_cv=regular_max_cv,
+            interpretation_delta_threshold=interpretation_delta_threshold,
+            interpretation_avg_threshold=interpretation_avg_threshold,
+            interpretation_risk_share_threshold=interpretation_risk_share_threshold,
             project_id=selected_project_id,
             dimension=selected_dimension,
             budget_distribution_window=budget_window,
@@ -125,6 +174,14 @@ def month_summary(request):
                 selected_month=selected_month,
                 report_currency=report_currency,
                 anomaly_threshold=anomaly_threshold,
+                anomaly_history_window=anomaly_history_window,
+                anomaly_min_history_months=anomaly_min_history_months,
+                regular_min_history_months=regular_min_history_months,
+                regular_min_active_share=regular_min_active_share,
+                regular_max_cv=regular_max_cv,
+                interpretation_delta_threshold=interpretation_delta_threshold,
+                interpretation_avg_threshold=interpretation_avg_threshold,
+                interpretation_risk_share_threshold=interpretation_risk_share_threshold,
                 project_id=selected_project_id,
                 dimension=selected_dimension,
                 budget_distribution_window=budget_window,
@@ -164,9 +221,17 @@ def month_summary(request):
         'selected_project_name': selected_project.name if selected_project else '—',
         'selected_month_value': report.get('selected_month_value') or month_param,
         'selected_currency': report_currency,
-        'selected_threshold': str(anomaly_threshold),
+        'selected_threshold': _format_decimal_string(anomaly_threshold),
         'selected_dimension': selected_dimension,
         'selected_budget_window': budget_window,
+        'selected_interpretation_delta_threshold': _format_decimal_string(interpretation_delta_threshold),
+        'selected_interpretation_avg_threshold': _format_decimal_string(interpretation_avg_threshold),
+        'selected_interpretation_risk_share_threshold': _format_decimal_string(interpretation_risk_share_threshold),
+        'selected_regular_min_history_months': regular_min_history_months,
+        'selected_regular_min_active_share': _format_decimal_string(regular_min_active_share * 100),
+        'selected_regular_max_cv': _format_decimal_string(regular_max_cv),
+        'selected_anomaly_history_window': anomaly_history_window,
+        'selected_anomaly_min_history_months': anomaly_min_history_months,
         'budget_notice': budget_notice,
         'budget_error': budget_error,
     })
@@ -182,6 +247,13 @@ def _select_project(user, raw_project_id):
         projects.filter(name__iexact=DEFAULT_PROJECT_NAME).first()
         or projects.order_by('name').first()
     )
+
+
+def _format_decimal_string(value):
+    text = format(value, 'f')
+    if '.' in text:
+        text = text.rstrip('0').rstrip('.')
+    return text or '0'
 
 
 def _read_uploaded_forecast_file(uploaded_file):

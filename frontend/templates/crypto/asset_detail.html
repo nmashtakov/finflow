@@ -1,0 +1,119 @@
+{% extends "components/base.html" %}
+{% load crypto_extras %}
+
+{% block title %}{{ asset.symbol }} — Криптопортфель{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="mt-4 mb-3">
+        <a href="{% url 'crypto:dashboard' %}" class="text-decoration-none">&larr; Портфель</a>
+        <h1 class="mb-0 mt-2">{{ asset.name }} ({{ asset.symbol }})</h1>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if summary %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Quantity</div>
+                    <div class="fs-4 fw-bold">{{ summary.quantity|fmt_qty }} {{ asset.symbol }}</div>
+                    {% if summary.ledger_quantity and summary.ledger_quantity != summary.quantity %}
+                    <div class="small text-muted">По транзакциям: {{ summary.ledger_quantity|fmt_qty }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Avg. buy price</div>
+                    <div class="fs-4 fw-bold">${{ summary.avg_buy_price|fmt_decimal:4 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted small">Total profit / loss</div>
+                    <div class="fs-4 fw-bold {% if summary.profit_abs > 0 %}text-success{% elif summary.profit_abs < 0 %}text-danger{% endif %}">
+                        {% if summary.profit_abs > 0 %}+{% endif %}${{ summary.profit_abs|fmt_decimal }}
+                        ({{ summary.profit_pct|fmt_pct }})
+                    </div>
+                    <div class="small text-muted">Текущая стоимость: ${{ summary.current_value|fmt_decimal }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header">Добавить транзакцию</div>
+        <div class="card-body">
+            <form method="post" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_transaction">
+                <div class="col-md-2">{{ tx_form.tx_type.label_tag }}{{ tx_form.tx_type }}</div>
+                <div class="col-md-3">{{ tx_form.occurred_at.label_tag }}{{ tx_form.occurred_at }}</div>
+                <div class="col-md-2">{{ tx_form.quantity.label_tag }}{{ tx_form.quantity }}</div>
+                <div class="col-md-2">{{ tx_form.price_quote.label_tag }}{{ tx_form.price_quote }}</div>
+                <div class="col-md-2">{{ tx_form.total_quote.label_tag }}{{ tx_form.total_quote }}</div>
+                <div class="col-md-2">{{ tx_form.fee_quote.label_tag }}{{ tx_form.fee_quote }}</div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Добавить</button></div>
+                <div class="col-12">{{ tx_form.note.label_tag }}{{ tx_form.note }}</div>
+            </form>
+            <div class="form-text">Avg buy учитывает комиссию: (сумма + fee) / кол-во. Сумму можно указать в поле «Сумма покупки» вместо цены.</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Transactions</div>
+        <div class="card-body table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">Fees</th>
+                        <th>Source</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.get_tx_type_display }}</td>
+                        <td>{{ tx.occurred_at|date:'d.m.Y H:i' }}</td>
+                        <td class="text-end">${{ tx.price_quote|fmt_decimal:4 }}</td>
+                        <td class="text-end">+{{ tx.quantity }} (${{ tx.total_quote|fmt_decimal }})</td>
+                        <td class="text-end">${{ tx.fee_quote|fmt_decimal:4 }}</td>
+                        <td>{{ tx.get_source_display }}</td>
+                        <td class="text-end">
+                            {% if tx.source == 'manual' %}
+                            <form method="post" class="d-inline" onsubmit="return confirm('Удалить транзакцию?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="transaction_id" value="{{ tx.id }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-muted">Нет транзакций</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

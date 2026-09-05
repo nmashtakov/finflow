@@ -1,0 +1,486 @@
+{% extends "components/base.html" %}
+
+{% block title %}Заказ {{ order.internal_order_number }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .crm-order-view-card {
+        border: 1px solid #e6edf6;
+        border-radius: 1.25rem;
+        background: #ffffff;
+        box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.05);
+    }
+    .crm-order-view-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .crm-order-view-title {
+        font-size: 2rem;
+        line-height: 1.1;
+        margin: 0;
+    }
+    .crm-order-view-subtitle {
+        color: #8a94a6;
+        margin: 0.45rem 0 0;
+    }
+    .crm-order-view-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    .crm-order-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.75rem;
+        border-radius: 999px;
+        background: #f4f7fb;
+        color: #465268;
+        font-size: 0.92rem;
+        font-weight: 600;
+    }
+    .crm-order-pill--muted {
+        color: #8a94a6;
+    }
+    .crm-order-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 1.5rem;
+    }
+    .crm-order-meta-grid--secondary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 0.85rem;
+    }
+    .crm-order-meta-card {
+        border: 1px solid #edf2f8;
+        border-radius: 1rem;
+        background: #fbfdff;
+        padding: 0.95rem 1rem;
+    }
+    .crm-order-meta-card__label {
+        color: #8a94a6;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    .crm-order-meta-card__value {
+        color: #243146;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+    .crm-order-finance {
+        min-width: 18rem;
+        max-width: 22rem;
+        border: 1px solid #edf2f8;
+        border-radius: 1.15rem;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        padding: 1rem 1.1rem;
+    }
+    .crm-order-finance__row + .crm-order-finance__row {
+        border-top: 1px solid #edf2f8;
+        margin-top: 0.85rem;
+        padding-top: 0.85rem;
+    }
+    .crm-order-finance__label {
+        color: #8a94a6;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    .crm-order-finance__value {
+        color: #243146;
+        font-size: 1.3rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .crm-order-finance__value--profit {
+        color: #0f766e;
+    }
+    .crm-order-note {
+        margin-top: 1.25rem;
+        border-radius: 1rem;
+        background: #f8fbff;
+        border: 1px solid #e3ecf8;
+        padding: 0.95rem 1rem;
+        color: #4a5568;
+    }
+    .crm-order-items {
+        display: grid;
+        gap: 1rem;
+    }
+    .crm-order-item {
+        border: 1px solid #e7edf6;
+        border-radius: 1.1rem;
+        background: #ffffff;
+        padding: 1rem;
+    }
+    .crm-order-item__top {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    .crm-order-item__main {
+        display: flex;
+        gap: 1rem;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .crm-order-item__thumb {
+        width: 76px;
+        height: 76px;
+        flex: 0 0 76px;
+        border-radius: 1rem;
+        border: 1px solid #dfe6f2;
+        background: #ffffff;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .crm-order-item__thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .crm-order-item__thumb-empty {
+        color: #a0a9b8;
+        font-size: 1.35rem;
+        line-height: 1;
+    }
+    .crm-order-item__sku {
+        color: #8a94a6;
+        font-size: 0.85rem;
+        margin-bottom: 0.2rem;
+    }
+    .crm-order-item__name {
+        color: #243146;
+        font-size: 1.08rem;
+        font-weight: 700;
+        line-height: 1.3;
+        margin-bottom: 0.25rem;
+    }
+    .crm-order-item__comment {
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+    .crm-order-item__stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem;
+        min-width: min(100%, 32rem);
+    }
+    .crm-order-item__stat {
+        border: 1px solid #edf2f8;
+        border-radius: 0.95rem;
+        background: #fbfdff;
+        padding: 0.85rem 0.95rem;
+    }
+    .crm-order-item__stat-label {
+        color: #8a94a6;
+        font-size: 0.78rem;
+        margin-bottom: 0.25rem;
+    }
+    .crm-order-item__stat-value {
+        color: #243146;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+    .crm-order-item__stat-value--warning {
+        color: #b45309;
+    }
+    .crm-order-item__reservations {
+        margin-top: 1rem;
+        border-top: 1px solid #edf2f8;
+        padding-top: 1rem;
+    }
+    .crm-order-item__reservations-title {
+        color: #465268;
+        font-size: 0.92rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+    .crm-order-lot-list {
+        display: grid;
+        gap: 0.7rem;
+    }
+    .crm-order-lot {
+        border-radius: 0.95rem;
+        background: #f8fbff;
+        border: 1px solid #e3ecf8;
+        padding: 0.8rem 0.9rem;
+        display: grid;
+        grid-template-columns: 1.6fr 0.9fr 1fr 1fr;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    .crm-order-lot__title {
+        color: #243146;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+    .crm-order-lot__meta {
+        color: #8a94a6;
+        font-size: 0.84rem;
+        margin-top: 0.15rem;
+    }
+    .crm-order-lot__value {
+        color: #243146;
+        font-weight: 600;
+        text-align: right;
+    }
+    .crm-order-empty-note {
+        border-radius: 1rem;
+        background: #f8fbff;
+        border: 1px dashed #d7e2f0;
+        color: #8a94a6;
+        padding: 1rem;
+        text-align: center;
+    }
+    @media (max-width: 1199.98px) {
+        .crm-order-meta-grid,
+        .crm-order-meta-grid--secondary,
+        .crm-order-item__stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .crm-order-lot {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .crm-order-lot__value {
+            text-align: left;
+        }
+    }
+    @media (max-width: 767.98px) {
+        .crm-order-view-title {
+            font-size: 1.65rem;
+        }
+        .crm-order-meta-grid,
+        .crm-order-meta-grid--secondary,
+        .crm-order-item__stats,
+        .crm-order-lot {
+            grid-template-columns: 1fr;
+        }
+        .crm-order-finance {
+            min-width: 100%;
+            max-width: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Заказ {{ order.internal_order_number }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'crm:orders' %}" class="btn btn-outline-secondary">Назад к заказам</a>
+            <a href="{% url 'crm:order_edit' order.id %}" class="btn btn-primary">Редактировать</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'warning' in message.tags %}alert-warning{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="crm-order-view-card p-4 p-xl-5 mb-4">
+        <div class="crm-order-view-head">
+            <div>
+                <h2 class="crm-order-view-title">{{ order.internal_order_number }}</h2>
+                <p class="crm-order-view-subtitle">
+                    {% if order.external_order_number %}
+                    Внешний номер: {{ order.external_order_number }}
+                    {% else %}
+                    Внешний номер не указан
+                    {% endif %}
+                </p>
+                <div class="crm-order-view-badges">
+                    <span class="badge bg-{{ order.status_badge_class }}">{{ order.status_badge_label }}</span>
+                    <span class="crm-order-pill">{{ order.sales_channel.name }}</span>
+                    <span class="crm-order-pill {% if not order.delivery_method %}crm-order-pill--muted{% endif %}">
+                        {{ order.delivery_method.name|default:"Способ доставки не указан" }}
+                    </span>
+                    <span class="crm-order-pill">{{ order.get_payment_status_display }}</span>
+                    <span class="crm-order-pill {% if order_summary.missing_quantity_total %}crm-order-pill--muted{% endif %}">
+                        {{ order_summary.reservation_status_label }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="crm-order-finance">
+                <div class="crm-order-finance__row">
+                    <div class="crm-order-finance__label">Сумма продажи</div>
+                    <div class="crm-order-finance__value">{{ order_summary.total_sale_amount|floatformat:2 }} {{ organization.base_currency }}</div>
+                </div>
+                <div class="crm-order-finance__row">
+                    <div class="crm-order-finance__label">Себестоимость резерва</div>
+                    <div class="crm-order-finance__value">{{ order_summary.total_reserved_cost|floatformat:2 }} {{ organization.base_currency }}</div>
+                </div>
+                <div class="crm-order-finance__row">
+                    <div class="crm-order-finance__label">Предварительная валовая прибыль</div>
+                    <div class="crm-order-finance__value crm-order-finance__value--profit">{{ order_summary.gross_profit|floatformat:2 }} {{ organization.base_currency }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="crm-order-meta-grid">
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Дата заказа</div>
+                <div class="crm-order-meta-card__value">{{ order.order_date|date:"d.m.Y" }}</div>
+            </div>
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Создан в CRM</div>
+                <div class="crm-order-meta-card__value">{{ order.created_at|date:"d.m.Y H:i" }}</div>
+            </div>
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Клиент</div>
+                <div class="crm-order-meta-card__value">{{ order.customer_name|default:"—" }}</div>
+            </div>
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Телефон</div>
+                <div class="crm-order-meta-card__value">{{ order.customer_phone|default:"—" }}</div>
+            </div>
+        </div>
+
+        <div class="crm-order-meta-grid crm-order-meta-grid--secondary">
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Контакт</div>
+                <div class="crm-order-meta-card__value">{{ order.customer_contact|default:"—" }}</div>
+            </div>
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Клиент из базы</div>
+                <div class="crm-order-meta-card__value">{{ order.customer_counterparty.name|default:"—" }}</div>
+            </div>
+            <div class="crm-order-meta-card">
+                <div class="crm-order-meta-card__label">Проблема с резервом</div>
+                <div class="crm-order-meta-card__value">
+                    {% if order_summary.missing_quantity_total %}
+                    Не хватает {{ order_summary.missing_quantity_total }} шт.
+                    {% else %}
+                    Проблем нет
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if order.comment %}
+        <div class="crm-order-note">
+            {{ order.comment|linebreaksbr }}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="crm-order-view-card p-4 p-xl-5">
+        <div class="d-flex justify-content-between align-items-center gap-3 mb-4">
+            <div>
+                <h3 class="mb-1">Товары</h3>
+                <p class="text-muted mb-0">По каждой строке видно резерв по партиям FIFO и предварительную себестоимость.</p>
+            </div>
+            <div class="text-muted small">
+                {{ order_summary.line_count }} строк · {{ order_summary.total_quantity }} шт.
+            </div>
+        </div>
+
+        {% if order_summary.items %}
+        <div class="crm-order-items">
+            {% for item in order_summary.items %}
+            <div class="crm-order-item">
+                <div class="crm-order-item__top">
+                    <div class="crm-order-item__main">
+                        <div class="crm-order-item__thumb">
+                            {% if item.product.photo %}
+                            <img src="{{ item.product.photo.url }}" alt="{{ item.product.name }}">
+                            {% else %}
+                            <div class="crm-order-item__thumb-empty">—</div>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="crm-order-item__sku">{{ item.product.sku }}</div>
+                            <div class="crm-order-item__name">{{ item.product.name }}</div>
+                            {% if item.comment %}
+                            <div class="crm-order-item__comment">{{ item.comment }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="crm-order-item__stats">
+                        <div class="crm-order-item__stat">
+                            <div class="crm-order-item__stat-label">Количество</div>
+                            <div class="crm-order-item__stat-value">{{ item.quantity }} шт.</div>
+                        </div>
+                        <div class="crm-order-item__stat">
+                            <div class="crm-order-item__stat-label">Цена продажи</div>
+                            <div class="crm-order-item__stat-value">
+                                {% if item.sale_price is not None %}
+                                {{ item.sale_price|floatformat:2 }} {{ organization.base_currency }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="crm-order-item__stat">
+                            <div class="crm-order-item__stat-label">Сумма строки</div>
+                            <div class="crm-order-item__stat-value">{{ item.line_total_value|floatformat:2 }} {{ organization.base_currency }}</div>
+                        </div>
+                        <div class="crm-order-item__stat">
+                            <div class="crm-order-item__stat-label">Резерв</div>
+                            <div class="crm-order-item__stat-value {% if item.shortage_quantity %}crm-order-item__stat-value--warning{% endif %}">
+                                {{ item.reserved_quantity }} / {{ item.quantity }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crm-order-item__reservations">
+                    <div class="crm-order-item__reservations-title">Партии в резерве</div>
+                    {% if item.active_reservations %}
+                    <div class="crm-order-lot-list">
+                        {% for reservation in item.active_reservations %}
+                        <div class="crm-order-lot">
+                            <div>
+                                <div class="crm-order-lot__title">{{ reservation.stock_lot.warehouse.name }}</div>
+                                <div class="crm-order-lot__meta">
+                                    {{ reservation.stock_lot.purchase_item.purchase.purchase_date|date:"d.m.Y" }}
+                                    {% if reservation.stock_lot.purchase_item.purchase.counterparty %}
+                                    · {{ reservation.stock_lot.purchase_item.purchase.counterparty.name }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="crm-order-lot__value">{{ reservation.quantity }} шт.</div>
+                            <div class="crm-order-lot__value">{{ reservation.unit_cost_with_extra|floatformat:2 }} {{ organization.base_currency }} / шт.</div>
+                            <div class="crm-order-lot__value">{{ reservation.total_cost|floatformat:2 }} {{ organization.base_currency }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="crm-order-empty-note">
+                        {% if item.shortage_quantity %}
+                        Для этой строки не удалось полностью зарезервировать остаток. Не хватает {{ item.shortage_quantity }} шт.
+                        {% elif order.status == 'cancelled' %}
+                        Заказ отменен, резерв освобожден.
+                        {% else %}
+                        Активного резерва по этой строке пока нет.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="crm-order-empty-note">В заказе пока нет строк.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

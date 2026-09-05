@@ -790,9 +790,18 @@
                 return (payload.transactions || []).map((tx) => `
                     <tr data-transaction-id="${tx.id}">
                         <td>${tx.date}</td>
-                        <td class="${tx.is_income ? 'text-success' : 'text-danger'}">${tx.amount}</td>
+                        <td class="${tx.is_income ? 'text-success' : 'text-danger'}">
+                            <div>${tx.amount}</div>
+                            ${tx.is_reimbursement_offset ? '<div class="mt-1"><span class="badge text-bg-info">Возврат</span></div>' : ''}
+                            ${tx.has_reimbursement_adjustment ? `<div class="small text-info mt-1">Учтён возврат: +${tx.reimbursement_applied_amount}</div>` : ''}
+                            ${tx.is_fully_reimbursed ? '<div class="small text-muted mt-1">Полностью компенсировано</div>' : ''}
+                        </td>
                         <td>${tx.currency_code}</td>
-                        <td>${tx.report_amount}</td>
+                        <td>
+                            <div>${tx.report_amount}</div>
+                            ${tx.raw_report_amount && tx.raw_report_amount !== tx.report_amount ? `<div class="small text-muted mt-1">Исходно: ${tx.raw_report_amount}</div>` : ''}
+                            ${tx.is_excluded_in_net ? '<div class="small text-muted mt-1">В этом режиме не входит в сумму</div>' : ''}
+                        </td>
                         <td>${tx.account}</td>
                         <td>${tx.project}</td>
                         <td>${tx.category}</td>
@@ -960,7 +969,7 @@
                 setModalState({
                     loading: false,
                     empty: !payload.transactions.length,
-                    meta: `${metaLabel} / ${payload.month} · операций: ${payload.count} · сумма: ${payload.total} ${payload.report_currency}${payload.missing_count ? ` · без курса: ${payload.missing_count}` : ''}`,
+                    meta: `${metaLabel} / ${payload.month} · операций: ${payload.count} · ${payload.total_label || 'сумма'}: ${payload.total} ${payload.report_currency}${payload.missing_count ? ` · без курса: ${payload.missing_count}` : ''}`,
                     rows: renderDrilldownRows(payload),
                 });
                 if (typeof feather !== 'undefined') {
@@ -980,9 +989,9 @@
 
                     const params = new URLSearchParams(new FormData(document.getElementById('analyticsFiltersForm')));
                     params.set('month', `${year}-${month}`);
-                    if (row.dataset.projectId) params.set('project_id', row.dataset.projectId);
-                    if (row.dataset.categoryId) params.set('category_id', row.dataset.categoryId);
-                    if (row.dataset.subcategoryId) params.set('subcategory_id', row.dataset.subcategoryId);
+                    if (row.dataset.projectId) params.set('drill_project_id', row.dataset.projectId);
+                    if (row.dataset.categoryId) params.set('drill_category_id', row.dataset.categoryId);
+                    if (row.dataset.subcategoryId) params.set('drill_subcategory_id', row.dataset.subcategoryId);
 
                     try {
                         await loadDrilldown(params, row.querySelector('.pivot-text')?.textContent || '');

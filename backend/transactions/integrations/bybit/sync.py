@@ -54,7 +54,19 @@ def _parse_amount(item: Dict):
 
 
 def _parse_fee_amount(item: Dict):
-    for key in ("fee", "withdrawFee", "depositFee", "tax", "txFee", "networkFee", "serviceCharge"):
+    for key in (
+        "fee",
+        "execFee",
+        "convertFee",
+        "exchangeFee",
+        "feeAmount",
+        "withdrawFee",
+        "depositFee",
+        "tax",
+        "txFee",
+        "networkFee",
+        "serviceCharge",
+    ):
         value = item.get(key)
         if value in (None, ""):
             continue

@@ -1,0 +1,164 @@
+{% extends "components/base.html" %}
+
+{% block title %}Заказы CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Заказы</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'crm:order_create' %}" class="btn btn-primary">Новый заказ</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'warning' in message.tags %}alert-warning{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Поиск</label>
+                    <input type="text" name="q" value="{{ filters.q }}" class="form-control" placeholder="Наш номер, внешний номер, клиент">
+                </div>
+                <div class="col-12 col-lg-2">
+                    <label class="form-label">Статус</label>
+                    <select name="status" class="form-select">
+                        <option value="">Все статусы</option>
+                        {% for status_value, status_label in status_choices %}
+                        <option value="{{ status_value }}" {% if filters.status == status_value %}selected{% endif %}>{{ status_label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-lg-2">
+                    <label class="form-label">Источник продаж</label>
+                    <select name="sales_channel" class="form-select">
+                        <option value="">Все источники</option>
+                        {% for sales_channel in sales_channels %}
+                        <option value="{{ sales_channel.id }}" {% if filters.sales_channel == sales_channel.id|stringformat:"s" %}selected{% endif %}>{{ sales_channel.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <label class="form-label">Дата от</label>
+                    <input type="date" name="date_from" value="{{ filters.date_from }}" class="form-control">
+                </div>
+                <div class="col-6 col-lg-2">
+                    <label class="form-label">Дата до</label>
+                    <input type="date" name="date_to" value="{{ filters.date_to }}" class="form-control">
+                </div>
+                <div class="col-12 col-lg-1 d-flex gap-2">
+                    <a href="{% url 'crm:orders' %}" class="btn btn-outline-secondary w-100">Сбросить</a>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Найти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Наш номер</th>
+                            <th>Внешний номер</th>
+                            <th>Дата</th>
+                            <th>Источник</th>
+                            <th>Клиент</th>
+                            <th>Статус</th>
+                            <th>Сумма</th>
+                            <th>Резерв</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr {% if order.status == 'cancelled' %}class="text-muted"{% endif %}>
+                            <td><strong>{{ order.internal_order_number }}</strong></td>
+                            <td>{{ order.external_order_number|default:"—" }}</td>
+                            <td>{{ order.order_date|date:"d.m.Y" }}</td>
+                            <td>{{ order.sales_channel.name }}</td>
+                            <td>
+                                <div>{{ order.customer_name|default:"—" }}</div>
+                                {% if order.customer_phone %}
+                                <div class="text-muted small">{{ order.customer_phone }}</div>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-{{ order.status_badge_class }}">{{ order.status_badge_label }}</span></td>
+                            <td>{{ order.total_amount|floatformat:2 }} {{ organization.base_currency }}</td>
+                            <td>
+                                {% if order.reservation_status_code == 'full' %}
+                                <span class="badge bg-success">{{ order.reservation_status_label }}</span>
+                                {% elif order.reservation_status_code == 'partial' %}
+                                <span class="badge bg-warning text-dark">{{ order.reservation_status_label }}</span>
+                                <div class="small text-muted mt-1">Не хватает {{ order.missing_quantity_total }} шт.</div>
+                                {% elif order.reservation_status_code == 'released' %}
+                                <span class="badge bg-secondary">{{ order.reservation_status_label }}</span>
+                                {% else %}
+                                <span class="badge bg-danger">{{ order.reservation_status_label }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'crm:order_detail' order.id %}" class="btn btn-outline-secondary btn-sm">Просмотр</a>
+                                <a href="{% url 'crm:order_edit' order.id %}" class="btn btn-outline-secondary btn-sm">Редактировать</a>
+                                {% if order.status != 'cancelled' %}
+                                <form method="post" action="{% url 'crm:order_cancel' order.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Отменить</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">Заказов пока нет.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="mt-4" aria-label="Пагинация заказов">
+                <ul class="pagination mb-0">
+                    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                        {% if page_obj.has_previous %}
+                        <a class="page-link" href="{% if pagination_query %}?{{ pagination_query }}&page={{ page_obj.previous_page_number }}{% else %}?page={{ page_obj.previous_page_number }}{% endif %}">Назад</a>
+                        {% else %}
+                        <span class="page-link">Назад</span>
+                        {% endif %}
+                    </li>
+                    {% for page_number in page_obj.paginator.page_range %}
+                        {% if page_number == page_obj.number %}
+                        <li class="page-item active"><span class="page-link">{{ page_number }}</span></li>
+                        {% elif page_number >= page_obj.number|add:"-2" and page_number <= page_obj.number|add:"2" %}
+                        <li class="page-item">
+                            <a class="page-link" href="{% if pagination_query %}?{{ pagination_query }}&page={{ page_number }}{% else %}?page={{ page_number }}{% endif %}">{{ page_number }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                        {% if page_obj.has_next %}
+                        <a class="page-link" href="{% if pagination_query %}?{{ pagination_query }}&page={{ page_obj.next_page_number }}{% else %}?page={{ page_obj.next_page_number }}{% endif %}">Вперед</a>
+                        {% else %}
+                        <span class="page-link">Вперед</span>
+                        {% endif %}
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'accounts',
+    'capital',
+    'crypto',
     'crm',
     'core',
     'forecasting',
@@ -141,3 +143,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+COINMARKETCAP_API_KEY = os.environ.get('COINMARKETCAP_API_KEY', '')
+CRYPTOCOMPARE_API_KEY = os.environ.get('CRYPTOCOMPARE_API_KEY', '')

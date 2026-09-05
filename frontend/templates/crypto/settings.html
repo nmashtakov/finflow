@@ -1,0 +1,132 @@
+{% extends "components/base.html" %}
+
+{% block title %}Настройки криптопортфеля{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Настройки криптопортфеля</h1>
+            <p class="text-muted mb-0">Монеты, CoinMarketCap и Bybit.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'crypto:dashboard' %}">К портфелю</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if tab == 'assets' %}active{% endif %}" href="?tab=assets">Монеты</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if tab == 'connection' %}active{% endif %}" href="?tab=connection">Подключения</a>
+        </li>
+    </ul>
+
+    {% if tab == 'connection' %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_settings">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">CoinMarketCap API key</label>
+                        {{ settings_form.cmc_api_key }}
+                        <div class="form-text">
+                            Бесплатный ключ: <a href="https://coinmarketcap.com/api/" target="_blank" rel="noopener">coinmarketcap.com/api</a>.
+                            Без ключа используется CoinGecko.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Подключение Bybit (покупки)</label>
+                        {{ settings_form.bybit_connection }}
+                        <div class="form-text">
+                            <a href="{% url 'transactions:bybit-connections' %}">Настроить API-ключи Bybit</a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Валюта отчёта</label>
+                        {{ settings_form.report_currency }}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Сохранить</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Добавить монету</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_asset">
+                        <div class="mb-3">
+                            <label class="form-label">Тикер</label>
+                            {{ asset_form.symbol }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Название</label>
+                            {{ asset_form.name }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                    <hr>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="seed_defaults">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Загрузить стандартный список (8 монет)</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">Отслеживаемые монеты</div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Тикер</th>
+                                <th>Название</th>
+                                <th>Активна</th>
+                                <th>Порядок</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for asset in assets %}
+                            <tr>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="edit_asset">
+                                    <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                                    <td><input class="form-control form-control-sm" name="symbol" value="{{ asset.symbol }}"></td>
+                                    <td><input class="form-control form-control-sm" name="name" value="{{ asset.name }}"></td>
+                                    <td><input type="checkbox" class="form-check-input" name="is_active" {% if asset.is_active %}checked{% endif %}></td>
+                                    <td><input class="form-control form-control-sm" name="sort_order" value="{{ asset.sort_order }}"></td>
+                                    <td><button type="submit" class="btn btn-sm btn-outline-primary">Сохранить</button></td>
+                                </form>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-muted">Список пуст</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

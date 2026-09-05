@@ -4,19 +4,23 @@
         <div class="nav-link-icon"><i data-feather="briefcase"></i></div>
         Дашборд
     </a>
-    <a class="nav-link {% if request.resolver_match.url_name == 'products' or request.resolver_match.url_name == 'product_create' or request.resolver_match.url_name == 'product_edit' %}active{% endif %}" href="{% url 'crm:products' %}">
+    <a class="nav-link {% if request.resolver_match.url_name == 'products' or request.resolver_match.url_name == 'product_create' or request.resolver_match.url_name == 'product_edit' or request.resolver_match.url_name == 'product_bulk_import' %}active{% endif %}" href="{% url 'crm:products' %}">
         <div class="nav-link-icon"><i data-feather="package"></i></div>
         Товары
     </a>
-    <a class="nav-link {% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'sales_channel_create' or request.resolver_match.url_name == 'sales_channel_edit' or request.resolver_match.url_name == 'warehouse_create' or request.resolver_match.url_name == 'warehouse_edit' %}active{% endif %}" href="{% url 'crm:settings' %}">
+    <a class="nav-link {% if request.resolver_match.url_name == 'purchases' or request.resolver_match.url_name == 'purchase_create' or request.resolver_match.url_name == 'purchase_detail' or request.resolver_match.url_name == 'purchase_edit' %}active{% endif %}" href="{% url 'crm:purchases' %}">
+        <div class="nav-link-icon"><i data-feather="truck"></i></div>
+        Закупки
+    </a>
+    <a class="nav-link {% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'sales_channel_create' or request.resolver_match.url_name == 'sales_channel_edit' or request.resolver_match.url_name == 'warehouse_create' or request.resolver_match.url_name == 'warehouse_edit' or request.resolver_match.url_name == 'delivery_method_create' or request.resolver_match.url_name == 'delivery_method_edit' or request.resolver_match.url_name == 'counterparty_create' or request.resolver_match.url_name == 'counterparty_edit' %}active{% endif %}" href="{% url 'crm:settings' %}">
         <div class="nav-link-icon"><i data-feather="settings"></i></div>
         Справочники
     </a>
     <div class="sidenav-menu-heading">Разделы</div>
-    <div class="nav-link disabled">
+    <a class="nav-link {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' or request.resolver_match.url_name == 'order_detail' or request.resolver_match.url_name == 'order_edit' %}active{% endif %}" href="{% url 'crm:orders' %}">
         <div class="nav-link-icon"><i data-feather="shopping-bag"></i></div>
         Заказы
-    </div>
+    </a>
     <div class="nav-link disabled">
         <div class="nav-link-icon"><i data-feather="clipboard"></i></div>
         Инвентаризация

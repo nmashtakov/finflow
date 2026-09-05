@@ -1,0 +1,79 @@
+{% extends "components/base.html" %}
+
+{% block title %}Закупки CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Закупки</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <a href="{% url 'crm:purchase_create' %}" class="btn btn-primary">Новая закупка</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Склад</th>
+                            <th>Контрагент</th>
+                            <th>Позиции</th>
+                            <th>Количество</th>
+                            <th>Сумма</th>
+                            <th>Статус</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for purchase in purchases %}
+                        <tr {% if purchase.status == 'cancelled' %}class="text-muted"{% endif %}>
+                            <td><strong>{{ purchase.purchase_date|date:"d.m.Y" }}</strong></td>
+                            <td>{{ purchase.warehouse.name|default:"—" }}</td>
+                            <td>{{ purchase.counterparty.name|default:"—" }}</td>
+                            <td>{{ purchase.line_count }}</td>
+                            <td>{{ purchase.total_quantity }} шт.</td>
+                            <td>{{ purchase.total_amount|floatformat:2 }} {{ organization.base_currency }}</td>
+                            <td>
+                                {% if purchase.status == 'posted' %}
+                                <span class="badge bg-success">Проведена</span>
+                                {% elif purchase.status == 'draft' %}
+                                <span class="badge bg-warning text-dark">Черновик</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Отменена</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'crm:purchase_detail' purchase.id %}" class="btn btn-outline-secondary btn-sm">Просмотр</a>
+                                <a href="{% url 'crm:purchase_edit' purchase.id %}" class="btn btn-outline-secondary btn-sm">Редактировать</a>
+                                {% if purchase.status != 'cancelled' %}
+                                <form method="post" action="{% url 'crm:purchase_archive' purchase.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Отменить</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">Закупок пока нет.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

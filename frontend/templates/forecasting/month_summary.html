@@ -172,6 +172,70 @@
     .forecast-actions .btn {
         white-space: nowrap;
     }
+    .section-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+    .section-toolbar-title {
+        min-width: 0;
+    }
+    .section-tools {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .icon-action-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .icon-action-btn:hover {
+        border-color: #94a3b8;
+        color: #111827;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    }
+    .icon-action-btn .feather {
+        width: 15px;
+        height: 15px;
+    }
+    .settings-note {
+        color: #64748b;
+        font-size: 0.82rem;
+    }
+    .budget-goal-panel {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 1rem 1.1rem;
+    }
+    .budget-goal-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+        gap: 0.9rem 1rem;
+    }
+    .budget-goal-label {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+    .budget-inline-compact {
+        justify-content: flex-start;
+    }
+    .budget-inline-compact .budget-inline-value {
+        font-size: 1rem;
+        font-weight: 800;
+    }
     .category-chart-scroll {
         max-height: 340px;
         overflow-y: auto;
@@ -349,6 +413,49 @@
             flex-wrap: wrap;
             justify-content: flex-start;
         }
+        .budget-goal-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media print {
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+        body {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .forecast-page {
+            background: #ffffff;
+            padding-bottom: 0;
+        }
+        .container-fluid {
+            max-width: none;
+            padding: 0 !important;
+        }
+        .forecast-hero,
+        .forecast-card {
+            box-shadow: none;
+            break-inside: avoid;
+        }
+        .forecast-actions,
+        .icon-action-btn,
+        .budget-toolbar form,
+        .budget-inline-trigger,
+        .form-range,
+        .technical-toggle,
+        #budgetSaveStatus,
+        .btn,
+        .modal,
+        .modal-backdrop {
+            display: none !important;
+        }
+        #forecastTechnicalDetails.collapse {
+            display: block !important;
+            height: auto !important;
+        }
     }
 </style>
 {% endblock %}
@@ -371,6 +478,9 @@
                 </div>
                 <div class="col-12 col-xl-5">
                     <div class="forecast-actions">
+                        {% if report.has_data %}
+                        <button class="btn btn-outline-secondary" id="forecastExportPdfButton" type="button">Экспорт PDF</button>
+                        {% endif %}
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#systemSourceModal">Данные системы</button>
                         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#fileSourceModal">Загрузка файла</button>
                         {% if has_uploaded_file %}
@@ -387,6 +497,12 @@
                     <form method="get" id="forecastFilterForm">
                         <input type="hidden" name="source" value="system">
                         <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                        <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                        <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                        <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                        <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                        <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                        <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                         <div class="modal-header">
                             <div>
                                 <h5 class="modal-title">Данные системы</h5>
@@ -464,7 +580,14 @@
                             {% csrf_token %}
                             <input type="hidden" name="action" value="upload_file">
                             <input type="hidden" name="source" value="file">
+                            <input type="hidden" name="threshold" value="{{ selected_threshold }}">
                             <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                            <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                            <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                            <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                            <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                            <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                             <label class="form-label fw-semibold">1. Выберите CSV/XLSX</label>
                             <div class="input-group">
                                 <input class="form-control" type="file" name="forecast_file" accept=".csv,.xlsx,.xls" required>
@@ -479,6 +602,12 @@
                             <input type="hidden" name="source" value="file">
                             <input type="hidden" name="threshold" value="{{ selected_threshold }}">
                             <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                            <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                            <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                            <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                            <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                            <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                             <div class="fw-semibold mb-3">2. Сопоставьте столбцы</div>
                             <div class="row g-3">
                                 <div class="col-12 col-md-6">
@@ -553,6 +682,12 @@
                             <input type="hidden" name="source" value="file">
                             <input type="hidden" name="threshold" value="{{ selected_threshold }}">
                             <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                            <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                            <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                            <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                            <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                            <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                            <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                             <div class="fw-semibold mb-3">Параметры загруженного файла</div>
                             {% if file_rows_range %}
                             <div class="text-muted small mb-3">Период в файле: {{ file_rows_range }}</div>
@@ -592,6 +727,97 @@
                         {% endif %}
                         {% endif %}
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="interpretationSettingsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="get">
+                        <input type="hidden" name="source" value="{{ source }}">
+                        <input type="hidden" name="project" value="{{ selected_project_id }}">
+                        <input type="hidden" name="month" value="{{ selected_month_value }}">
+                        <input type="hidden" name="report_currency" value="{{ selected_currency }}">
+                        <input type="hidden" name="dimension" value="{{ selected_dimension }}">
+                        <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                        <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                        <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                        <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                        <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title">Пороги интерпретации</h5>
+                                <div class="small text-muted">Настраивают, когда блок выводов считает изменение значимым.</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Порог к прошлому месяцу, %</label>
+                                    <input class="form-control" type="number" name="interpretation_delta_threshold" min="0" max="100" step="1" value="{{ selected_interpretation_delta_threshold }}">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Порог к среднему, %</label>
+                                    <input class="form-control" type="number" name="interpretation_avg_threshold" min="0" max="100" step="1" value="{{ selected_interpretation_avg_threshold }}">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Порог рисковой доли, %</label>
+                                    <input class="form-control" type="number" name="interpretation_risk_share_threshold" min="0" max="100" step="1" value="{{ selected_interpretation_risk_share_threshold }}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Применить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="profileSettingsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="get">
+                        <input type="hidden" name="source" value="{{ source }}">
+                        <input type="hidden" name="project" value="{{ selected_project_id }}">
+                        <input type="hidden" name="month" value="{{ selected_month_value }}">
+                        <input type="hidden" name="report_currency" value="{{ selected_currency }}">
+                        <input type="hidden" name="dimension" value="{{ selected_dimension }}">
+                        <input type="hidden" name="budget_window" value="{{ selected_budget_window }}">
+                        <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                        <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                        <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title">Параметры регулярности</h5>
+                                <div class="small text-muted">Определяют, когда категория попадает в регулярную, а не в рисковую часть.</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Минимум истории, мес.</label>
+                                    <input class="form-control" type="number" name="regular_min_history_months" min="1" max="60" step="1" value="{{ selected_regular_min_history_months }}">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Минимальная активность, %</label>
+                                    <input class="form-control" type="number" name="regular_min_active_share" min="0" max="100" step="1" value="{{ selected_regular_min_active_share }}">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Максимальный CV</label>
+                                    <input class="form-control" type="number" name="regular_max_cv" min="0" max="10" step="0.1" value="{{ selected_regular_max_cv }}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Применить</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -657,10 +883,22 @@
             <div class="col-12 col-xl-4">
                 <div class="forecast-card h-100">
                     <div class="card-header bg-transparent">
-                        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
-                            Главные выводы
-                            <span class="info-icon" data-bs-toggle="tooltip" title="Автоматические текстовые выводы по выбранному месяцу: изменение к прошлому месяцу, отклонение от среднего, доля рисковой части, аномалии и прогноз следующего месяца.">?</span>
-                        </h6>
+                        <div class="section-toolbar">
+                            <div class="section-toolbar-title">
+                                <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                                    Главные выводы
+                                    <span class="info-icon" data-bs-toggle="tooltip" title="Автоматические текстовые выводы по выбранному месяцу: изменение к прошлому месяцу, отклонение от среднего, доля рисковой части, аномалии и прогноз следующего месяца.">?</span>
+                                </h6>
+                                <div class="settings-note mt-1">
+                                    Пороги: месяц {{ report.settings.interpretation_delta_threshold_display }}, среднее {{ report.settings.interpretation_avg_threshold_display }}, риск {{ report.settings.interpretation_risk_share_threshold_display }}.
+                                </div>
+                            </div>
+                            <div class="section-tools">
+                                <button class="icon-action-btn" type="button" data-bs-toggle="modal" data-bs-target="#interpretationSettingsModal" aria-label="Настроить пороги интерпретации">
+                                    <i data-feather="settings"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="insight-list">
@@ -714,17 +952,24 @@
             <div class="col-12 col-xl-7">
                 <div class="forecast-card h-100">
                     <div class="card-header bg-transparent d-flex flex-column flex-lg-row justify-content-between gap-2">
-                        <div>
-                            <h6 class="mb-0 d-inline-flex align-items-center gap-2">
-                                Профиль расходов
-                                <span class="info-icon" data-bs-toggle="tooltip" title="Таблица показывает тип категории, сумму в выбранном месяце, долю активных месяцев и CV. CV — отношение стандартного отклонения к среднему расходу категории.">?</span>
-                            </h6>
-                            <span class="text-muted small">Регулярность: активность ≥ {{ report.settings.regular_min_active_share }}, CV ≤ {{ report.settings.regular_max_cv }}</span>
+                        <div class="section-toolbar w-100">
+                            <div class="section-toolbar-title">
+                                <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+                                    Профиль расходов
+                                    <span class="info-icon" data-bs-toggle="tooltip" title="Таблица показывает тип категории, сумму в выбранном месяце, долю активных месяцев и CV. CV — отношение стандартного отклонения к среднему расходу категории.">?</span>
+                                </h6>
+                                <span class="text-muted small">Регулярность: история ≥ {{ report.settings.regular_min_history_months }} мес., активность ≥ {{ report.settings.regular_min_active_share }}, CV ≤ {{ report.settings.regular_max_cv }}</span>
+                            </div>
+                            <div class="section-tools">
+                                <select class="form-select form-select-sm" id="dimensionQuickSelect" style="max-width: 220px;">
+                                    <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
+                                    <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
+                                </select>
+                                <button class="icon-action-btn" type="button" data-bs-toggle="modal" data-bs-target="#profileSettingsModal" aria-label="Настроить параметры регулярности">
+                                    <i data-feather="settings"></i>
+                                </button>
+                            </div>
                         </div>
-                        <select class="form-select form-select-sm" id="dimensionQuickSelect" style="max-width: 220px;">
-                            <option value="category" {% if selected_dimension == 'category' %}selected{% endif %}>По категориям</option>
-                            <option value="subcategory" {% if selected_dimension == 'subcategory' %}selected{% endif %}>По подкатегориям</option>
-                        </select>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive profile-scroll">
@@ -877,6 +1122,12 @@
                         <input type="hidden" name="report_currency" value="{{ selected_currency }}">
                         <input type="hidden" name="dimension" value="{{ selected_dimension }}">
                         <input type="hidden" name="threshold" value="{{ selected_threshold }}">
+                        <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                        <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                        <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                        <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                        <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                        <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                         <div>
                             <label class="form-label form-label-sm mb-1">Окно среднего</label>
                             <select class="form-select form-select-sm" name="budget_window">
@@ -906,11 +1157,17 @@
                     <input type="hidden" name="dimension" value="{{ selected_dimension }}">
                     <input type="hidden" name="threshold" value="{{ selected_threshold }}">
                     <input type="hidden" name="budget_window" value="{{ report.budget.distribution_window }}">
+                    <input type="hidden" name="interpretation_delta_threshold" value="{{ selected_interpretation_delta_threshold }}">
+                    <input type="hidden" name="interpretation_avg_threshold" value="{{ selected_interpretation_avg_threshold }}">
+                    <input type="hidden" name="interpretation_risk_share_threshold" value="{{ selected_interpretation_risk_share_threshold }}">
+                    <input type="hidden" name="regular_min_history_months" value="{{ selected_regular_min_history_months }}">
+                    <input type="hidden" name="regular_min_active_share" value="{{ selected_regular_min_active_share }}">
+                    <input type="hidden" name="regular_max_cv" value="{{ selected_regular_max_cv }}">
                 <div class="row g-3 mb-4">
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-6 col-xl">
                         <div class="forecast-card forecast-metric accent-blue">
                             <div class="metric-label mb-2">Прогноз дохода</div>
-                            <div class="budget-inline budget-inline-summary js-budget-inline" data-summary="1">
+                            <div class="budget-inline budget-inline-summary js-budget-inline" data-summary="1" data-format="money">
                                 <div class="budget-inline-value js-budget-inline-value">{{ report.budget.summary.forecast_income }} {{ report.report_currency }}</div>
                                 <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать прогноз дохода">
                                     <i data-feather="edit-2"></i>
@@ -920,25 +1177,72 @@
                             <div class="metric-note mt-2">Авто: {{ report.budget.summary.forecast_income_auto }} {{ report.report_currency }} · скользящее среднее за {{ report.settings.forecast_window }} месяцев.</div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-6 col-xl">
                         <div class="forecast-card forecast-metric accent-teal">
                             <div class="metric-label mb-2">Прогноз расхода</div>
                             <div class="metric-value">{{ report.budget.summary.forecast_expense }} {{ report.report_currency }}</div>
                             <div class="metric-note mt-2">Регулярная часть: {{ report.budget.summary.forecast_regular }} · рисковая: {{ report.budget.summary.forecast_risk }}</div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-6 col-xl">
                         <div class="forecast-card forecast-metric accent-amber">
                             <div class="metric-label mb-2">План расхода</div>
                             <div class="metric-value" id="budgetPlannedTotal">{{ report.budget.summary.planned_total }} {{ report.report_currency }}</div>
-                            <div class="metric-note mt-2">Рекомендовано: {{ report.budget.summary.suggested_total }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">Прогноз: {{ report.budget.summary.suggested_total }} {{ report.report_currency }} · рекомендация: <span id="budgetRecommendedTotal">{{ report.budget.summary.recommended_total }} {{ report.report_currency }}</span>.</div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-6 col-xl">
+                        <div class="forecast-card forecast-metric accent-teal">
+                            <div class="metric-label mb-2">В накопление</div>
+                            <div class="metric-value" id="budgetGoalRequired">{{ report.budget.summary.goal_required_monthly }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">Осталось к цели: <span id="budgetGoalGap">{{ report.budget.summary.goal_gap_amount }} {{ report.report_currency }}</span>.</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl">
                         <div class="forecast-card forecast-metric accent-red">
-                            <div class="metric-label mb-2">Остаток</div>
-                            <div class="metric-value" id="budgetPlannedBalance">{{ report.budget.summary.planned_balance }} {{ report.report_currency }}</div>
-                            <div class="metric-note mt-2">Прогноз дохода минус план расходов.</div>
+                            <div class="metric-label mb-2">Остаток после цели</div>
+                            <div class="metric-value" id="budgetPlannedBalanceAfterGoal">{{ report.budget.summary.planned_balance_after_goal }} {{ report.report_currency }}</div>
+                            <div class="metric-note mt-2">До накоплений: <span id="budgetPlannedBalance">{{ report.budget.summary.planned_balance }} {{ report.report_currency }}</span>.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="budget-goal-panel mb-4">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-end">
+                        <div>
+                            <div class="metric-label mb-2">Цель накоплений</div>
+                            <div class="budget-summary-note">Влияет на колонку рекомендаций и остаток после цели.</div>
+                        </div>
+                        <div class="budget-goal-grid">
+                            <div>
+                                <div class="budget-goal-label">Целевая сумма</div>
+                                <div class="budget-inline budget-inline-compact js-budget-inline" data-format="money">
+                                    <div class="budget-inline-value js-budget-inline-value">{{ report.budget.summary.goal_target_amount }} {{ report.report_currency }}</div>
+                                    <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать сумму цели">
+                                        <i data-feather="edit-2"></i>
+                                    </button>
+                                    <input class="form-control form-control-sm budget-input js-budget-goal-input js-budget-inline-input budget-hidden" type="number" name="budget_goal_target_amount" min="0" step="1" value="{{ report.budget.summary.goal_target_amount|cut:' ' }}">
+                                </div>
+                            </div>
+                            <div>
+                                <div class="budget-goal-label">Уже накоплено</div>
+                                <div class="budget-inline budget-inline-compact js-budget-inline" data-format="money">
+                                    <div class="budget-inline-value js-budget-inline-value">{{ report.budget.summary.goal_current_amount }} {{ report.report_currency }}</div>
+                                    <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать текущие накопления">
+                                        <i data-feather="edit-2"></i>
+                                    </button>
+                                    <input class="form-control form-control-sm budget-input js-budget-goal-input js-budget-inline-input budget-hidden" type="number" name="budget_goal_current_amount" min="0" step="1" value="{{ report.budget.summary.goal_current_amount|cut:' ' }}">
+                                </div>
+                            </div>
+                            <div>
+                                <div class="budget-goal-label">Срок, мес.</div>
+                                <div class="budget-inline budget-inline-compact js-budget-inline" data-format="integer" data-suffix="мес.">
+                                    <div class="budget-inline-value js-budget-inline-value">{{ report.budget.summary.goal_months_left }} мес.</div>
+                                    <button class="budget-inline-trigger js-budget-inline-trigger" type="button" aria-label="Редактировать срок цели">
+                                        <i data-feather="edit-2"></i>
+                                    </button>
+                                    <input class="form-control form-control-sm budget-input js-budget-goal-input js-budget-inline-input budget-hidden" type="number" name="budget_goal_months_left" min="1" step="1" value="{{ report.budget.summary.goal_months_left }}">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -953,7 +1257,8 @@
                                     <th class="text-end">Отклонение</th>
                                     <th class="text-end">Среднее за {{ report.budget.distribution_window }} мес.</th>
                                     <th class="text-end">Доля</th>
-                                    <th class="text-end">Рекомендовано</th>
+                                    <th class="text-end">Прогноз</th>
+                                    <th class="text-end">Рекомендация</th>
                                     <th class="text-end">План</th>
                                 </tr>
                             </thead>
@@ -988,6 +1293,7 @@
                                     <td class="text-end">{{ line.avg }} {{ report.report_currency }}</td>
                                     <td class="text-end">{{ line.share }}</td>
                                     <td class="text-end">{{ line.suggested }} {{ report.report_currency }}</td>
+                                    <td class="text-end"><span class="js-budget-recommended">{{ line.recommended }} {{ report.report_currency }}</span></td>
                                     <td class="text-end">
                                         <div class="budget-inline js-budget-inline">
                                             <div class="budget-inline-value js-budget-inline-value">{{ line.planned_display }} {{ report.report_currency }}</div>
@@ -1004,6 +1310,7 @@
                                 <tr class="budget-total-row">
                                     <th colspan="7">Итого</th>
                                     <th class="text-end">{{ report.budget.summary.suggested_total }} {{ report.report_currency }}</th>
+                                    <th class="text-end" id="budgetRecommendedTableTotal">{{ report.budget.summary.recommended_total }} {{ report.report_currency }}</th>
                                     <th class="text-end" id="budgetPlanTableTotal">{{ report.budget.summary.planned_total }} {{ report.report_currency }}</th>
                                 </tr>
                             </tfoot>
@@ -1164,18 +1471,29 @@
         const thresholdRange = document.getElementById('anomalyThresholdRange');
         const thresholdValue = document.getElementById('anomalyThresholdValue');
         const filterForm = document.getElementById('forecastFilterForm');
+        const printButton = document.getElementById('forecastExportPdfButton');
         const technicalDetails = document.getElementById('forecastTechnicalDetails');
         const technicalToggle = document.querySelector('[data-bs-target="#forecastTechnicalDetails"]');
         const budgetPlanForm = document.getElementById('budgetPlanForm');
         const budgetPlanInputs = Array.from(document.querySelectorAll('.js-budget-plan-input'));
         const budgetIncomeInput = document.querySelector('.js-budget-income-input');
+        const budgetGoalInputs = Array.from(document.querySelectorAll('.js-budget-goal-input'));
+        const budgetGoalTargetInput = document.querySelector('input[name="budget_goal_target_amount"]');
+        const budgetGoalCurrentInput = document.querySelector('input[name="budget_goal_current_amount"]');
+        const budgetGoalMonthsInput = document.querySelector('input[name="budget_goal_months_left"]');
         const budgetPlannedTotalEl = document.getElementById('budgetPlannedTotal');
+        const budgetRecommendedTotalEl = document.getElementById('budgetRecommendedTotal');
         const budgetPlannedBalanceEl = document.getElementById('budgetPlannedBalance');
+        const budgetGoalRequiredEl = document.getElementById('budgetGoalRequired');
+        const budgetGoalGapEl = document.getElementById('budgetGoalGap');
+        const budgetPlannedBalanceAfterGoalEl = document.getElementById('budgetPlannedBalanceAfterGoal');
+        const budgetRecommendedTableTotalEl = document.getElementById('budgetRecommendedTableTotal');
         const budgetPlanTableTotalEl = document.getElementById('budgetPlanTableTotal');
         const budgetSaveStatusEl = document.getElementById('budgetSaveStatus');
         const budgetSavedAtLabelEl = document.getElementById('budgetSavedAtLabel');
         let budgetSavePromise = null;
         let errorChart = null;
+        let collapseTechnicalAfterPrint = false;
         const categoryDeltaPlugin = {
             id: 'categoryDeltaPlugin',
             afterDatasetsDraw(chart) {
@@ -1198,6 +1516,7 @@
         if (thresholdRange && thresholdValue) {
             thresholdRange.addEventListener('input', function () {
                 thresholdValue.textContent = thresholdRange.value.replace('.', ',');
+                syncThresholdInputs(thresholdRange.value);
                 applyAnomalyThreshold(Number(thresholdRange.value));
                 renderSelectedAnomalies(Number(thresholdRange.value));
             });
@@ -1211,6 +1530,10 @@
                 technicalToggle.textContent = 'Показать детали';
             });
         }
+        if (printButton) {
+            printButton.addEventListener('click', handlePdfExport);
+        }
+        window.addEventListener('afterprint', restoreAfterPrint);
         const dimensionQuickSelect = document.getElementById('dimensionQuickSelect');
         if (dimensionQuickSelect) {
             dimensionQuickSelect.addEventListener('change', function () {
@@ -1233,6 +1556,12 @@
                 budgetIncomeInput.addEventListener('keydown', handleBudgetInlineKeydown);
                 budgetIncomeInput.addEventListener('blur', handleBudgetInlineBlur);
             }
+            budgetGoalInputs.forEach((input) => {
+                input.addEventListener('input', updateBudgetTotals);
+                input.addEventListener('input', syncInlineDisplay);
+                input.addEventListener('keydown', handleBudgetInlineKeydown);
+                input.addEventListener('blur', handleBudgetInlineBlur);
+            });
             document.querySelectorAll('.js-budget-inline-trigger').forEach((button) => {
                 button.addEventListener('click', function () {
                     activateBudgetInline(button.closest('.js-budget-inline'));
@@ -1240,6 +1569,7 @@
             });
             updateBudgetTotals();
         }
+        syncThresholdInputs(currentThresholdLabel());
 
         const commonScales = {
             y: {
@@ -1529,6 +1859,23 @@
             });
         }
 
+        function handlePdfExport() {
+            renderErrorChart();
+            if (technicalDetails && window.bootstrap && !technicalDetails.classList.contains('show')) {
+                collapseTechnicalAfterPrint = true;
+                window.bootstrap.Collapse.getOrCreateInstance(technicalDetails, { toggle: false }).show();
+                window.setTimeout(() => window.print(), 180);
+                return;
+            }
+            window.setTimeout(() => window.print(), 80);
+        }
+
+        function restoreAfterPrint() {
+            if (!collapseTechnicalAfterPrint || !technicalDetails || !window.bootstrap) return;
+            collapseTechnicalAfterPrint = false;
+            window.bootstrap.Collapse.getOrCreateInstance(technicalDetails, { toggle: false }).hide();
+        }
+
         function renderSelectedAnomalies(threshold) {
             const tableWrap = document.getElementById('selectedAnomalyTableWrap');
             const bodyEl = document.getElementById('selectedAnomalyBody');
@@ -1631,6 +1978,14 @@
             return '—';
         }
 
+        function syncThresholdInputs(value) {
+            const normalized = String(value || '').trim();
+            document.querySelectorAll('input[name="threshold"]').forEach((input) => {
+                if (input === thresholdRange) return;
+                input.value = normalized;
+            });
+        }
+
         function formatZScore(value) {
             const text = String(value || '').trim();
             if (!text) return '—';
@@ -1646,17 +2001,75 @@
 
         function updateBudgetTotals() {
             if (!budgetPlanForm) return;
-            const income = parseBudgetNumber(budgetIncomeInput ? budgetIncomeInput.value : '0');
-            const total = budgetPlanInputs.reduce((sum, input) => sum + parseBudgetNumber(input.value), 0);
+            const income = budgetIncomeInput
+                ? normalizedInlineValue(budgetIncomeInput, budgetIncomeInput.closest('.js-budget-inline'))
+                : 0;
+            const total = budgetPlanInputs.reduce((sum, input) => sum + normalizedInlineValue(input, input.closest('.js-budget-inline')), 0);
             const balance = income - total;
+            const goalTarget = budgetGoalTargetInput
+                ? normalizedInlineValue(budgetGoalTargetInput, budgetGoalTargetInput.closest('.js-budget-inline'))
+                : 0;
+            const goalCurrent = budgetGoalCurrentInput
+                ? normalizedInlineValue(budgetGoalCurrentInput, budgetGoalCurrentInput.closest('.js-budget-inline'))
+                : 0;
+            const goalMonths = budgetGoalMonthsInput
+                ? normalizedInlineValue(budgetGoalMonthsInput, budgetGoalMonthsInput.closest('.js-budget-inline'))
+                : 1;
+            const goalGap = Math.max(goalTarget - goalCurrent, 0);
+            const goalRequired = goalGap > 0 && goalMonths > 0 ? goalGap / goalMonths : 0;
+            const forecastRows = Array.from(document.querySelectorAll('.budget-table tbody tr')).map((row) => {
+                const expenseType = row.querySelector('input[name="budget_expense_type"]')?.value || 'risk';
+                const forecastAmount = parseBudgetNumber(row.querySelector('input[name="budget_suggested_amount"]')?.value || '0');
+                const recommendedEl = row.querySelector('.js-budget-recommended');
+                return { row, expenseType, forecastAmount, recommendedEl };
+            });
+            const forecastTotal = forecastRows.reduce((sum, item) => sum + item.forecastAmount, 0);
+            const regularForecast = forecastRows
+                .filter((item) => item.expenseType === 'regular')
+                .reduce((sum, item) => sum + item.forecastAmount, 0);
+            const riskForecast = forecastRows
+                .filter((item) => item.expenseType !== 'regular')
+                .reduce((sum, item) => sum + item.forecastAmount, 0);
+            const availableAfterGoal = Math.max(income - goalRequired, 0);
+            const recommendedTotal = Math.min(forecastTotal, availableAfterGoal);
+            const reductionNeeded = Math.max(forecastTotal - recommendedTotal, 0);
+            const recommendedRiskTotal = Math.max(riskForecast - reductionNeeded, 0);
+            const remainingReduction = Math.max(reductionNeeded - riskForecast, 0);
+            const recommendedRegularTotal = Math.max(regularForecast - remainingReduction, 0);
+            forecastRows.forEach((item) => {
+                const bucketForecast = item.expenseType === 'regular' ? regularForecast : riskForecast;
+                const bucketRecommended = item.expenseType === 'regular' ? recommendedRegularTotal : recommendedRiskTotal;
+                const rowRecommended = bucketForecast > 0
+                    ? bucketRecommended * item.forecastAmount / bucketForecast
+                    : 0;
+                if (item.recommendedEl) {
+                    item.recommendedEl.textContent = money(rowRecommended);
+                }
+            });
+            const balanceAfterGoal = balance - goalRequired;
             if (budgetPlannedTotalEl) {
                 budgetPlannedTotalEl.textContent = `${money(total)}`;
+            }
+            if (budgetRecommendedTotalEl) {
+                budgetRecommendedTotalEl.textContent = `${money(recommendedTotal)}`;
             }
             if (budgetPlannedBalanceEl) {
                 budgetPlannedBalanceEl.textContent = `${money(balance)}`;
             }
+            if (budgetGoalRequiredEl) {
+                budgetGoalRequiredEl.textContent = `${money(goalRequired)}`;
+            }
+            if (budgetGoalGapEl) {
+                budgetGoalGapEl.textContent = `${money(goalGap)}`;
+            }
+            if (budgetPlannedBalanceAfterGoalEl) {
+                budgetPlannedBalanceAfterGoalEl.textContent = `${money(balanceAfterGoal)}`;
+            }
             if (budgetPlanTableTotalEl) {
                 budgetPlanTableTotalEl.textContent = `${money(total)}`;
+            }
+            if (budgetRecommendedTableTotalEl) {
+                budgetRecommendedTableTotalEl.textContent = `${money(recommendedTotal)}`;
             }
         }
 
@@ -1672,7 +2085,7 @@
                 triggerEl.classList.add('budget-hidden');
             }
             if (inputEl) {
-                inputEl.dataset.originalValue = String(parseBudgetNumber(inputEl.value));
+                inputEl.dataset.originalValue = String(normalizedInlineValue(inputEl, container));
                 inputEl.classList.remove('budget-hidden');
                 inputEl.focus();
                 inputEl.select();
@@ -1685,7 +2098,7 @@
             if (!container) return;
             const valueEl = container.querySelector('.js-budget-inline-value');
             if (!valueEl) return;
-            valueEl.textContent = `${numberFormatter.format(parseBudgetNumber(input.value))} ${currency}`;
+            valueEl.textContent = formatInlineValue(container, normalizedInlineValue(input, container));
         }
 
         function collapseBudgetInline(container) {
@@ -1732,8 +2145,8 @@
                 collapseBudgetInline(container);
                 return;
             }
-            const originalValue = String(parseBudgetNumber(input.dataset.originalValue || input.value));
-            const currentValue = String(parseBudgetNumber(input.value));
+            const originalValue = String(input.dataset.originalValue || normalizedInlineValue(input, container));
+            const currentValue = String(normalizedInlineValue(input, container));
             if (originalValue === currentValue) {
                 collapseBudgetInline(container);
                 return;
@@ -1761,7 +2174,7 @@
                     if (!response.ok || !payload.ok) {
                         throw new Error(payload.message || 'Не удалось сохранить план.');
                     }
-                    input.dataset.originalValue = String(parseBudgetNumber(input.value));
+                    input.dataset.originalValue = String(normalizedInlineValue(input, container));
                     collapseBudgetInline(container);
                     if (payload.saved_at && budgetSavedAtLabelEl) {
                         budgetSavedAtLabelEl.textContent = `Последнее сохранение: ${payload.saved_at}.`;
@@ -1788,6 +2201,28 @@
             const normalized = String(value || '').trim().replace(',', '.');
             const parsed = Number.parseFloat(normalized);
             return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function normalizedInlineValue(input, container) {
+            const format = container?.dataset.format || 'money';
+            let value = parseBudgetNumber(input?.value || '0');
+            if (format === 'integer') {
+                value = Math.max(1, Math.round(value || 0));
+                if (input) input.value = String(value);
+                return value;
+            }
+            value = Math.max(0, value);
+            if (input) input.value = String(Math.round(value));
+            return value;
+        }
+
+        function formatInlineValue(container, value) {
+            const format = container?.dataset.format || 'money';
+            if (format === 'integer') {
+                const suffix = container?.dataset.suffix || '';
+                return suffix ? `${numberFormatter.format(value)} ${suffix}` : numberFormatter.format(value);
+            }
+            return `${numberFormatter.format(value)} ${currency}`;
         }
 
         function escapeHtml(value) {

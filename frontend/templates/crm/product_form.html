@@ -6,14 +6,14 @@
 <style>
     .crm-photo-tile {
         position: relative;
-        width: 220px;
+        width: 136px;
         max-width: 100%;
     }
     .crm-photo-tile__preview {
-        width: 220px;
+        width: 136px;
         max-width: 100%;
         aspect-ratio: 1 / 1;
-        border-radius: 1rem;
+        border-radius: 0.875rem;
         border: 1px solid #dfe5ee;
         background: #ffffff;
         display: flex;
@@ -33,28 +33,32 @@
     }
     .crm-photo-tile__action {
         position: absolute;
-        right: 0.75rem;
-        bottom: 0.75rem;
+        right: 0.4rem;
+        bottom: 0.4rem;
         width: 2rem;
         height: 2rem;
-        border: 0;
         border-radius: 999px;
-        background: rgba(17, 24, 39, 0.82);
-        color: #ffffff;
+        border: 1px solid #d7e2f0;
+        background: #ffffff;
+        color: #3d4b62;
+        box-shadow: 0 0.25rem 0.75rem rgba(15, 23, 42, 0.10);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
+        padding: 0;
     }
-    .crm-photo-tile__action:hover {
-        background: rgba(17, 24, 39, 0.95);
+    .crm-photo-tile__action svg,
+    .crm-photo-tile__placeholder svg {
+        width: 1rem;
+        height: 1rem;
+    }
+    .crm-stock-lots-table th,
+    .crm-stock-lots-table td {
+        white-space: nowrap;
     }
     @media (max-width: 767.98px) {
         .crm-photo-tile {
-            width: 100%;
-            max-width: 240px;
-            margin: 0 auto;
+            width: 136px;
         }
     }
 </style>
@@ -100,44 +104,42 @@
                                 <div class="text-danger small mt-1">{{ error }}</div>
                                 {% endfor %}
                             </div>
-                            <div class="col-12 col-lg-6">
+                            <div class="col-12 col-lg-2">
                                 <div class="crm-photo-tile">
                                     <div class="crm-photo-tile__preview" data-photo-preview>
                                         {% if form.instance.photo %}
                                         <img src="{{ form.instance.photo.url }}" alt="{{ form.instance.name|default:'Фото товара' }}" class="crm-photo-tile__image" data-photo-image>
                                         {% else %}
-                                        <i class="bi bi-image crm-photo-tile__placeholder" data-photo-placeholder></i>
+                                        <span class="crm-photo-tile__placeholder" data-photo-placeholder>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                                                <circle cx="8.5" cy="10" r="1.5"></circle>
+                                                <path d="M21 15l-4.5-4.5L8 19"></path>
+                                            </svg>
+                                        </span>
                                         {% endif %}
                                     </div>
                                     <div class="d-none">
                                         {{ form.photo }}
                                     </div>
-                                    <button type="button" class="crm-photo-tile__action" data-photo-trigger title="Изменить фото" aria-label="Изменить фото">
-                                        <i class="bi bi-pencil"></i>
+                                    <button type="button" class="crm-photo-tile__action" data-photo-trigger title="Редактировать фото" aria-label="Редактировать фото">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M12 20h9"></path>
+                                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
+                                        </svg>
                                     </button>
                                 </div>
                                 {% for error in form.photo.errors %}
                                 <div class="text-danger small mt-2">{{ error }}</div>
                                 {% endfor %}
                             </div>
-                            <div class="col-12 col-lg-6">
-                                <div class="card bg-light border-0 h-100">
-                                    <div class="card-body">
-                                        <h6 class="text-uppercase text-muted mb-2">Расчетная себестоимость</h6>
-                                        <div class="fs-4 mb-2">—</div>
-                                        <p class="text-muted small mb-0">Будет рассчитана после добавления закупочных партий.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
+                            <div class="col-12 col-lg-10">
                                 <label class="form-label" for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
                                 {{ form.comment }}
                                 {% for error in form.comment.errors %}
                                 <div class="text-danger small mt-1">{{ error }}</div>
                                 {% endfor %}
-                            </div>
-                            <div class="col-12">
-                                <div class="form-check">
+                                <div class="form-check mt-3">
                                     {{ form.is_active }}
                                     <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
                                 </div>
@@ -195,6 +197,52 @@
                             {% else %}
                             <div class="alert alert-light border mb-0">
                                 Для текущей организации пока нет активных каналов размещения товара.
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="border-top pt-4 mt-4">
+                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mb-3">
+                                <div>
+                                    <h4 class="mb-1">Остатки по партиям</h4>
+                                    <p class="text-muted mb-0">Хранятся отдельно по закупочным партиям, складам и фактической себестоимости.</p>
+                                </div>
+                                <div class="text-muted small">
+                                    Общий остаток:
+                                    <strong>{{ total_stock_quantity }} шт.</strong>
+                                </div>
+                            </div>
+
+                            {% if stock_lots %}
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle crm-stock-lots-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Склад</th>
+                                            <th>Дата закупки</th>
+                                            <th>Остаток</th>
+                                            <th>Себестоимость / шт.</th>
+                                            <th>Доп. расходы / шт.</th>
+                                            <th>Контрагент</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for stock_lot in stock_lots %}
+                                        <tr>
+                                            <td>{{ stock_lot.warehouse.name }}</td>
+                                            <td>{{ stock_lot.purchase_item.purchase.purchase_date|date:"d.m.Y" }}</td>
+                                            <td>{{ stock_lot.remaining_quantity }} шт.</td>
+                                            <td>{{ stock_lot.unit_cost }} {{ organization.base_currency }}</td>
+                                            <td>{{ stock_lot.extra_cost_per_unit }} {{ organization.base_currency }}</td>
+                                            <td>{{ stock_lot.purchase_item.purchase.counterparty.name|default:"—" }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-light border mb-0">
+                                Партии появятся после первой закупки.
                             </div>
                             {% endif %}
                         </div>

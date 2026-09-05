@@ -1,0 +1,370 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .crm-purchase-row[hidden] {
+        display: none !important;
+    }
+    .crm-purchase-mode-card {
+        border: 1px solid #e4ebf5;
+        border-radius: 1rem;
+        background: #f8fbff;
+        padding: 1.1rem 1.15rem;
+        height: 100%;
+    }
+    .crm-purchase-mode-card__title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .crm-purchase-mode-card__hint {
+        color: #8a94a6;
+        font-size: 0.92rem;
+        margin-bottom: 1rem;
+    }
+    .crm-purchase-preview-table td,
+    .crm-purchase-preview-table th {
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">{{ page_title }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if purchase %}
+            <a href="{% url 'crm:purchase_detail' purchase.id %}" class="btn btn-outline-secondary">Просмотр</a>
+            {% endif %}
+            <a href="{% url 'crm:purchases' %}" class="btn btn-outline-secondary">Назад к закупкам</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-9">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if item_formset.non_form_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in item_formset.non_form_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-3">
+                                <label class="form-label" for="{{ form.purchase_date.id_for_label }}">{{ form.purchase_date.label }}</label>
+                                {{ form.purchase_date }}
+                                {% for error in form.purchase_date.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-lg-3">
+                                <label class="form-label" for="{{ form.warehouse.id_for_label }}">{{ form.warehouse.label }}</label>
+                                {{ form.warehouse }}
+                                {% for error in form.warehouse.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-lg-3">
+                                <label class="form-label" for="{{ form.counterparty.id_for_label }}">{{ form.counterparty.label }}</label>
+                                {{ form.counterparty }}
+                                {% for error in form.counterparty.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-lg-3">
+                                <label class="form-label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                                {{ form.status }}
+                                {% for error in form.status.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
+                                {{ form.comment }}
+                                {% for error in form.comment.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="border-top pt-4 mt-4">
+                            <div class="mb-3">
+                                <h4 class="mb-1">Строки закупки</h4>
+                                <p class="text-muted mb-0">Все строки этой закупки поступают на выбранный выше склад.</p>
+                            </div>
+
+                            <div class="row g-3 mb-4">
+                                <div class="col-12 col-xl-5">
+                                    <div class="crm-purchase-mode-card">
+                                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                            <div>
+                                                <div class="crm-purchase-mode-card__title">Автозагрузка из CSV</div>
+                                                <div class="crm-purchase-mode-card__hint">Проверяет файл, показывает первые строки и подгружает их в форму. Закупка будет создана только после нажатия на основную кнопку внизу.</div>
+                                            </div>
+                                            <a href="{% url 'crm:purchase_template_download' %}" class="btn btn-outline-secondary btn-sm">Скачать шаблон CSV</a>
+                                        </div>
+
+                                        <div class="row g-3 align-items-end">
+                                            <div class="col-12">
+                                                <label class="form-label" for="{{ upload_form.file.id_for_label }}">{{ upload_form.file.label }}</label>
+                                                {{ upload_form.file }}
+                                                {% for error in upload_form.file.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12">
+                                                <button type="submit" name="load_csv" value="1" class="btn btn-outline-primary w-100">Проверить CSV и подгрузить строки</button>
+                                            </div>
+                                        </div>
+
+                                        {% if csv_preview %}
+                                        <div class="mt-4">
+                                            <div class="fw-semibold mb-2">Предпросмотр CSV</div>
+                                            <div class="small text-muted mb-2">
+                                                Склад: {{ csv_preview.warehouse_name }}.
+                                                {% if csv_preview.total_rows > 5 %}
+                                                Показаны первые 5 строк из {{ csv_preview.total_rows }}.
+                                                {% else %}
+                                                Показаны все {{ csv_preview.total_rows }} строк.
+                                                {% endif %}
+                                            </div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm align-middle mb-0 crm-purchase-preview-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Товар</th>
+                                                            <th>Кол-во</th>
+                                                            <th>Цена</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for preview_row in csv_preview.rows %}
+                                                        <tr>
+                                                            <td>
+                                                                <div>{{ preview_row.product_label }}</div>
+                                                                {% if preview_row.comment %}
+                                                                <div class="small text-muted">{{ preview_row.comment }}</div>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>{{ preview_row.quantity }}</td>
+                                                            <td>{{ preview_row.unit_cost }}{% if preview_row.extra_cost_total %} + {{ preview_row.extra_cost_total }} доп.{% endif %}</td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-xl-7">
+                                    <div class="crm-purchase-mode-card">
+                                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                            <div>
+                                                <div class="crm-purchase-mode-card__title">Ручное заполнение</div>
+                                                <div class="crm-purchase-mode-card__hint">Используйте, если нужно добавить строки вручную или поправить данные после CSV-подгрузки.</div>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-add-purchase-row>Добавить строку</button>
+                                        </div>
+                                        <div class="small text-muted">После подгрузки CSV строки появятся ниже и их можно будет проверить или исправить перед сохранением закупки.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{ item_formset.management_form }}
+                            <div class="vstack gap-3" data-purchase-formset>
+                                {% for row_form in item_formset %}
+                                <div class="card border crm-purchase-row" data-purchase-row>
+                                    <div class="card-body">
+                                        <div class="d-none">{{ row_form.DELETE }}</div>
+                                        <div class="row g-3">
+                                            <div class="col-12 col-lg-4">
+                                                <label class="form-label" for="{{ row_form.product.id_for_label }}">{{ row_form.product.label }}</label>
+                                                {{ row_form.product }}
+                                                {% for error in row_form.product.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-lg-2">
+                                                <label class="form-label" for="{{ row_form.quantity.id_for_label }}">{{ row_form.quantity.label }}</label>
+                                                {{ row_form.quantity }}
+                                                {% for error in row_form.quantity.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-lg-3">
+                                                <label class="form-label" for="{{ row_form.unit_cost.id_for_label }}">{{ row_form.unit_cost.label }}</label>
+                                                {{ row_form.unit_cost }}
+                                                {% for error in row_form.unit_cost.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-lg-3">
+                                                <label class="form-label" for="{{ row_form.extra_cost_total.id_for_label }}">{{ row_form.extra_cost_total.label }}</label>
+                                                {{ row_form.extra_cost_total }}
+                                                {% for error in row_form.extra_cost_total.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-lg-8">
+                                                <label class="form-label" for="{{ row_form.comment.id_for_label }}">{{ row_form.comment.label }}</label>
+                                                {{ row_form.comment }}
+                                                {% for error in row_form.comment.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-lg-3 d-flex align-items-end">
+                                                <button type="button" class="btn btn-outline-danger w-100" data-remove-purchase-row>Удалить</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        {% if purchase_detail_summary %}
+                        <div class="border-top pt-4 mt-4">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <div class="card bg-light border-0 h-100">
+                                        <div class="card-body">
+                                            <div class="text-muted small mb-1">Позиции</div>
+                                            <div class="fs-4">{{ purchase_detail_summary.line_count }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="card bg-light border-0 h-100">
+                                        <div class="card-body">
+                                            <div class="text-muted small mb-1">Количество</div>
+                                            <div class="fs-4">{{ purchase_detail_summary.total_quantity }} шт.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="card bg-light border-0 h-100">
+                                        <div class="card-body">
+                                            <div class="text-muted small mb-1">Сумма</div>
+                                            <div class="fs-4">{{ purchase_detail_summary.total_amount|floatformat:2 }} {{ organization.base_currency }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between align-items-center gap-3 mt-4">
+                            <a href="{% url 'crm:purchases' %}" class="btn btn-outline-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="purchase-row-template">
+    <div class="card border crm-purchase-row" data-purchase-row>
+        <div class="card-body">
+            <div class="d-none">{{ item_formset.empty_form.DELETE }}</div>
+            <div class="row g-3">
+                <div class="col-12 col-lg-4">
+                    <label class="form-label" for="{{ item_formset.empty_form.product.id_for_label }}">{{ item_formset.empty_form.product.label }}</label>
+                    {{ item_formset.empty_form.product }}
+                </div>
+                <div class="col-12 col-lg-2">
+                    <label class="form-label" for="{{ item_formset.empty_form.quantity.id_for_label }}">{{ item_formset.empty_form.quantity.label }}</label>
+                    {{ item_formset.empty_form.quantity }}
+                </div>
+                <div class="col-12 col-lg-3">
+                    <label class="form-label" for="{{ item_formset.empty_form.unit_cost.id_for_label }}">{{ item_formset.empty_form.unit_cost.label }}</label>
+                    {{ item_formset.empty_form.unit_cost }}
+                </div>
+                <div class="col-12 col-lg-3">
+                    <label class="form-label" for="{{ item_formset.empty_form.extra_cost_total.id_for_label }}">{{ item_formset.empty_form.extra_cost_total.label }}</label>
+                    {{ item_formset.empty_form.extra_cost_total }}
+                </div>
+                <div class="col-12 col-lg-8">
+                    <label class="form-label" for="{{ item_formset.empty_form.comment.id_for_label }}">{{ item_formset.empty_form.comment.label }}</label>
+                    {{ item_formset.empty_form.comment }}
+                </div>
+                <div class="col-12 col-lg-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-danger w-100" data-remove-purchase-row>Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const formsetContainer = document.querySelector('[data-purchase-formset]');
+        const addRowButton = document.querySelector('[data-add-purchase-row]');
+        const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
+        const templateElement = document.getElementById('purchase-row-template');
+
+        if (!formsetContainer || !addRowButton || !totalFormsInput || !templateElement) {
+            return;
+        }
+
+        const hideRow = function (row) {
+            const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+            if (deleteInput) {
+                deleteInput.checked = true;
+            }
+            row.hidden = true;
+        };
+
+        formsetContainer.addEventListener('click', function (event) {
+            const removeButton = event.target.closest('[data-remove-purchase-row]');
+            if (!removeButton) {
+                return;
+            }
+            const row = removeButton.closest('[data-purchase-row]');
+            if (row) {
+                hideRow(row);
+            }
+        });
+
+        addRowButton.addEventListener('click', function () {
+            const nextIndex = Number(totalFormsInput.value);
+            const html = templateElement.innerHTML.replace(/__prefix__/g, nextIndex);
+            formsetContainer.insertAdjacentHTML('beforeend', html);
+            totalFormsInput.value = String(nextIndex + 1);
+        });
+    });
+</script>
+{% endblock %}

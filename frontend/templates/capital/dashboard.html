@@ -1,0 +1,240 @@
+{% extends "components/base.html" %}
+
+{% block title %}Капитал{% endblock %}
+
+{% block extra_css %}
+<style>
+    .capital-chart-wrap { position: relative; height: 420px; }
+    .capital-kpi-card { min-width: 200px; }
+    .capital-kpi-row { overflow-x: auto; flex-wrap: nowrap; }
+    .position-table td, .position-table th { white-space: nowrap; vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Капитал</h1>
+            <p class="text-muted mb-0">Стоимость позиций на дату (balance sheet), не cash flow.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" href="{% url 'capital:snapshots' %}?date={{ as_of|date:'Y-m-d' }}">Ввод снимков</a>
+            <a class="btn btn-outline-secondary" href="{% url 'capital:settings' %}">Справочники</a>
+        </div>
+    </div>
+
+    <form method="get" class="card mb-4">
+        <div class="card-body row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Дата среза</label>
+                <input type="date" name="as_of" class="form-control" value="{{ as_of|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Валюта отчёта</label>
+                <select name="report_currency" class="form-select">
+                    {% for code in currencies %}
+                    <option value="{{ code }}" {% if code == report_currency %}selected{% endif %}>{{ code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">График</label>
+                <select name="granularity" class="form-select">
+                    <option value="day" {% if granularity == 'day' %}selected{% endif %}>По дням</option>
+                    <option value="month" {% if granularity == 'month' %}selected{% endif %}>По месяцам</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Период (дней)</label>
+                <input type="number" name="range_days" class="form-control" value="{{ range_days }}" min="7" max="730">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Проект</label>
+                <select name="project" class="form-select">
+                    <option value="">Все</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if project_filter == p.id|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Применить</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="d-flex gap-3 mb-4 capital-kpi-row">
+        <div class="card capital-kpi-card flex-shrink-0">
+            <div class="card-body">
+                <div class="text-muted small">Капитал P</div>
+                <div class="fs-3 fw-bold">{{ capital.total|floatformat:2 }} {{ report_currency }}</div>
+                <div class="small text-muted">на {{ as_of|date:'d.m.Y' }}</div>
+            </div>
+        </div>
+        <div class="card capital-kpi-card flex-shrink-0">
+            <div class="card-body">
+                <div class="text-muted small">Δ день</div>
+                <div class="fs-5 fw-semibold {% if delta_day and delta_day > 0 %}text-success{% elif delta_day and delta_day < 0 %}text-danger{% endif %}">
+                    {% if delta_day != None %}{{ delta_day|floatformat:2 }}{% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="card capital-kpi-card flex-shrink-0">
+            <div class="card-body">
+                <div class="text-muted small">Δ 7 дней</div>
+                <div class="fs-5 fw-semibold {% if delta_week and delta_week > 0 %}text-success{% elif delta_week and delta_week < 0 %}text-danger{% endif %}">
+                    {% if delta_week != None %}{{ delta_week|floatformat:2 }}{% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="card capital-kpi-card flex-shrink-0">
+            <div class="card-body">
+                <div class="text-muted small">Δ 30 дней</div>
+                <div class="fs-5 fw-semibold {% if delta_month and delta_month > 0 %}text-success{% elif delta_month and delta_month < 0 %}text-danger{% endif %}">
+                    {% if delta_month != None %}{{ delta_month|floatformat:2 }}{% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+        {% if capital.steam_adjusted %}
+        <div class="card capital-kpi-card flex-shrink-0">
+            <div class="card-body">
+                <div class="text-muted small">Steam (adjusted / nominal)</div>
+                <div class="fs-6 fw-semibold">{{ capital.steam_adjusted|floatformat:2 }} / {{ capital.steam_nominal|floatformat:2 }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header">Динамика капитала</div>
+                <div class="card-body">
+                    <div class="capital-chart-wrap">
+                        <canvas id="capitalTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">По классам</div>
+                <div class="card-body">
+                    <canvas id="capitalKindChart" height="280"></canvas>
+                    <ul class="list-group list-group-flush mt-3">
+                        {% for kind, value in capital.by_kind.items %}
+                        <li class="list-group-item d-flex justify-content-between px-0">
+                            <span>{% if kind == 'instrument' %}Инструменты{% elif kind == 'bank_link' %}Денежные средства{% elif kind == 'inventory' %}Товарный остаток{% elif kind == 'steam' %}Steam{% else %}{{ kind }}{% endif %}</span>
+                            <strong>{{ value|floatformat:2 }}</strong>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item px-0 text-muted">Нет данных</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Позиции на {{ as_of|date:'d.m.Y' }}</div>
+        <div class="card-body table-responsive">
+            <table class="table table-sm table-striped position-table">
+                <thead>
+                    <tr>
+                        <th>Проект</th>
+                        <th>Позиция</th>
+                        <th>Тип</th>
+                        <th>Класс</th>
+                        <th>Валюта</th>
+                        <th class="text-end">Значение</th>
+                        <th class="text-end">В {{ report_currency }}</th>
+                        <th>Снимок</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in positions %}
+                    <tr class="{% if not row.included %}text-muted{% endif %}">
+                        <td>{{ row.project_name }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.kind_label }}</td>
+                        <td>{{ row.asset_class_label|default:"—" }}</td>
+                        <td>{{ row.currency }}</td>
+                        <td class="text-end">
+                            {% if row.native_value != None %}{{ row.native_value|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if row.converted_value != None %}{{ row.converted_value|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if row.snapshot_date %}{{ row.snapshot_date|date:'d.m.Y' }}{% else %}—{% endif %}
+                            {% if not row.included %}<span class="badge bg-secondary ms-1">искл.</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-muted">Нет позиций. <a href="{% url 'capital:settings' %}?tab=positions">Добавить</a></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof feather !== 'undefined') feather.replace();
+
+    const series = {{ timeseries_json|safe }};
+    const labels = series.map(p => p.date);
+    const totals = series.map(p => p.total);
+
+    const trendCtx = document.getElementById('capitalTrendChart');
+    if (trendCtx) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Капитал P',
+                    data: totals,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false },
+                },
+            },
+        });
+    }
+
+    const kindData = {{ by_kind_json|safe }};
+    const kindLabelsMap = {{ kind_labels_json|safe }};
+    const kindKeys = Object.keys(kindData);
+    const kindCtx = document.getElementById('capitalKindChart');
+    if (kindCtx && kindKeys.length) {
+        new Chart(kindCtx, {
+            type: 'doughnut',
+            data: {
+                labels: kindKeys.map(k => kindLabelsMap[k] || k),
+                datasets: [{
+                    data: kindKeys.map(k => Math.abs(Number(kindData[k]))),
+                    backgroundColor: ['#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#dc2626'],
+                }],
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">{{ page_title }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <a href="{% url 'crm:products' %}" class="btn btn-outline-secondary">Назад к товарам</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% elif 'warning' in message.tags %}alert-warning{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label" for="{{ form.xlsx_file.id_for_label }}">{{ form.xlsx_file.label }}</label>
+                            {{ form.xlsx_file }}
+                            {% for error in form.xlsx_file.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="card bg-light border-0 mb-4">
+                            <div class="card-body">
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
+                                    <h6 class="mb-0">Как работает импорт</h6>
+                                    <a href="{% url 'crm:product_template_download' %}" class="btn btn-outline-secondary btn-sm">Скачать шаблон Excel</a>
+                                </div>
+                                <ul class="mb-0">
+                                    <li>Импорт создаёт только новые товары. Если `SKU` уже есть в CRM, строка будет пропущена и попадёт в список незагруженных.</li>
+                                    <li>Поддерживаются Excel-файлы `.xlsx` и `.xlsm`, берётся активный лист.</li>
+                                    <li>Фото подтягиваются из встроенных изображений в строке товара.</li>
+                                    <li>Если фото в строке нет или его не удалось привязать, товар всё равно загрузится без фото.</li>
+                                    <li>Минимально нужны колонки для `SKU` и названия. Подойдут заголовки вроде `sku` / `Номер` и `name` / `Название` / `Набор`.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center gap-3">
+                            <a href="{% url 'crm:products' %}" class="btn btn-outline-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">Запустить импорт</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

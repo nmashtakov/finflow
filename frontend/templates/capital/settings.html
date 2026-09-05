@@ -1,0 +1,232 @@
+{% extends "components/base.html" %}
+
+{% block title %}Капитал — справочники{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div>
+            <h1 class="mb-0">Справочники капитала</h1>
+            <p class="text-muted mb-0">Сайты вывода, Steam-аккаунты и позиции.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'capital:dashboard' %}">← Капитал</a>
+    </div>
+
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if tab == 'sites' %}active{% endif %}" href="?tab=sites">Сайты вывода</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if tab == 'steam' %}active{% endif %}" href="?tab=steam">Steam-аккаунты</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if tab == 'positions' %}active{% endif %}" href="?tab=positions">Позиции</a>
+        </li>
+    </ul>
+
+    {% if tab == 'sites' %}
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">Новый сайт</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_site">
+                        {% for field in site_form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">Сайты</div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Коэфф.</th>
+                                <th>Валюта</th>
+                                <th>Статус</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for site in sites %}
+                            <tr>
+                                <td>{{ site.name }}</td>
+                                <td>{{ site.default_coefficient }}</td>
+                                <td>{{ site.currency }}</td>
+                                <td>{% if site.is_active %}<span class="badge bg-success">активен</span>{% else %}<span class="badge bg-secondary">выкл</span>{% endif %}</td>
+                                <td class="text-end">
+                                    {% if site.is_active %}
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Деактивировать?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_site">
+                                        <input type="hidden" name="site_id" value="{{ site.id }}">
+                                        <button class="btn btn-sm btn-outline-danger">×</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-muted">Нет сайтов</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if tab == 'steam' %}
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Новый Steam-аккаунт</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_steam">
+                        {% for field in steam_form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">Steam-аккаунты</div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Код</th>
+                                <th>Логин</th>
+                                <th>Телефон</th>
+                                <th>Почта</th>
+                                <th>Валюта</th>
+                                <th>Steam ID</th>
+                                <th>Назначение</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for acc in steam_accounts %}
+                            <tr {% if not acc.is_active %}class="text-muted"{% endif %}>
+                                <td><strong>{{ acc.account_code }}</strong></td>
+                                <td>{{ acc.login|default:"—" }}</td>
+                                <td>{{ acc.phone|default:"—" }}</td>
+                                <td>{{ acc.email|default:"—" }}</td>
+                                <td>{{ acc.currency }}</td>
+                                <td>{{ acc.steam_id|default:"—" }}</td>
+                                <td>{{ acc.get_purpose_display }}</td>
+                                <td>
+                                    {% if acc.is_active %}
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Деактивировать?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_steam">
+                                        <input type="hidden" name="steam_id" value="{{ acc.id }}">
+                                        <button class="btn btn-sm btn-outline-danger">×</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="8" class="text-muted">Нет аккаунтов</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if tab == 'positions' %}
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Новая позиция</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_position">
+                        {% for field in position_form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                    <p class="small text-muted mt-3 mb-0">Steam-позиции для пар (аккаунт + сайт) создаются автоматически при добавлении сайта или аккаунта.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">Позиции</div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Тип</th>
+                                <th>Класс</th>
+                                <th>Проект</th>
+                                <th>Валюта</th>
+                                <th>В P</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pos in positions %}
+                            <tr>
+                                <td>{{ pos.name }}</td>
+                                <td>{{ pos.get_kind_display }}</td>
+                                <td>{{ pos.get_asset_class_display|default:"—" }}</td>
+                                <td>{{ pos.project.name|default:"—" }}</td>
+                                <td>{{ pos.currency }}</td>
+                                <td>{% if pos.include_in_total %}да{% else %}нет{% endif %}</td>
+                                <td>
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Удалить позицию?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_position">
+                                        <input type="hidden" name="position_id" value="{{ pos.id }}">
+                                        <button class="btn btn-sm btn-outline-danger">×</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-muted">Нет позиций</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>if (typeof feather !== 'undefined') feather.replace();</script>
+{% endblock %}

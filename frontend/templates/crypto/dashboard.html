@@ -1,0 +1,370 @@
+{% extends "components/base.html" %}
+{% load crypto_extras %}
+
+{% block title %}Криптопортфель{% endblock %}
+
+{% block extra_css %}
+<style>
+    #layoutSidenav_content main { background: #060b14; }
+    .crypto-shell {
+        color: #dbeafe;
+        padding: 1.5rem 1.25rem 2.5rem;
+        min-height: calc(100vh - 120px);
+    }
+    .crypto-shell .text-muted { color: #64748b !important; }
+    .crypto-hero {
+        background: linear-gradient(135deg, #111827 0%, #0f172a 55%, #172554 100%);
+        border: 1px solid #1e293b;
+        border-radius: 1rem;
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.25rem;
+    }
+    .crypto-hero h1 { font-size: 1.75rem; font-weight: 700; color: #f8fafc; }
+    .crypto-balance {
+        font-size: clamp(2rem, 4vw, 3rem);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: #f8fafc;
+        line-height: 1.1;
+    }
+    .crypto-panel {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 1rem;
+        overflow: hidden;
+    }
+    .crypto-panel .panel-head {
+        padding: .9rem 1.1rem;
+        border-bottom: 1px solid #1e293b;
+        font-weight: 600;
+        color: #cbd5e1;
+        background: rgba(15, 23, 42, .65);
+    }
+    .crypto-panel .panel-body { padding: 1rem 1.1rem; }
+    .crypto-stat {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: .85rem;
+        padding: 1rem 1.1rem;
+        min-width: 170px;
+        flex: 1 1 170px;
+    }
+    .crypto-stat .label { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+    .crypto-stat .value { font-size: 1.15rem; font-weight: 700; color: #f1f5f9; margin-top: .35rem; }
+    .crypto-stat .sub { font-size: .82rem; margin-top: .25rem; }
+    .profit-pos { color: #22c55e; }
+    .profit-neg { color: #ef4444; }
+    .crypto-toolbar .btn { border-radius: .65rem; }
+    .crypto-toolbar .btn-primary { background: #2563eb; border-color: #2563eb; }
+    .crypto-toolbar .btn-outline-light {
+        color: #cbd5e1;
+        border-color: #334155;
+    }
+    .crypto-toolbar .btn-outline-light:hover {
+        background: #1e293b;
+        color: #f8fafc;
+    }
+    .crypto-table { color: #dbeafe; margin-bottom: 0; }
+    .crypto-table thead th {
+        border-color: #1e293b;
+        color: #64748b;
+        font-size: .75rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        font-weight: 600;
+    }
+    .crypto-table tbody td { border-color: #172033; vertical-align: middle; }
+    .crypto-table tbody tr:hover { background: rgba(30, 41, 59, .35); }
+    .asset-link {
+        color: #93c5fd;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .asset-link:hover { color: #bfdbfe; }
+    .coin-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+    }
+    .coin-badge img { width: 22px; height: 22px; border-radius: 50%; }
+    .badge-buy {
+        background: rgba(34, 197, 94, .15);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, .25);
+    }
+    .allocation-list { list-style: none; padding: 0; margin: 1rem 0 0; }
+    .allocation-list li {
+        display: flex;
+        justify-content: space-between;
+        padding: .55rem 0;
+        border-bottom: 1px solid #172033;
+        font-size: .92rem;
+    }
+    .crypto-chart-wrap { position: relative; height: 260px; }
+    .crypto-filter {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: .85rem;
+        padding: .85rem 1rem;
+        margin-bottom: 1.25rem;
+    }
+    .crypto-filter .form-control,
+    .crypto-filter .form-select {
+        background: #111827;
+        border-color: #334155;
+        color: #e2e8f0;
+    }
+    .crypto-empty {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #64748b;
+    }
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate { color: #94a3b8 !important; }
+    .dataTables_wrapper .page-link { background: #111827; border-color: #334155; color: #cbd5e1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="crypto-shell">
+    <div class="crypto-hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <div class="text-muted small mb-1">Мой портфель</div>
+                <h1 class="mb-2">Криптопортфель</h1>
+                <div class="crypto-balance">${{ portfolio.total_value|fmt_decimal }}</div>
+                <div class="mt-2 {% if portfolio.change_24h > 0 %}profit-pos{% elif portfolio.change_24h < 0 %}profit-neg{% else %}text-muted{% endif %}">
+                    {% if portfolio.change_24h != None %}
+                        {% if portfolio.change_24h > 0 %}+{% endif %}${{ portfolio.change_24h|fmt_decimal }}
+                        ({{ portfolio.change_24h_pct|fmt_pct }}) за 24ч
+                    {% else %}Обновите курсы для расчёта изменения{% endif %}
+                </div>
+            </div>
+            <div class="crypto-toolbar d-flex gap-2 flex-wrap">
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="sync_balances">
+                    <button type="submit" class="btn btn-outline-light">Балансы Bybit</button>
+                </form>
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="sync_rates">
+                    <button type="submit" class="btn btn-outline-light">Курсы Bybit</button>
+                </form>
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="sync_transactions">
+                    <button type="submit" class="btn btn-primary">Синхр. покупки Bybit</button>
+                </form>
+                <a class="btn btn-outline-light" href="{% url 'crypto:settings' %}">Настройки</a>
+            </div>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="get" class="crypto-filter row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small text-muted">Дата оценки</label>
+            <input type="date" name="as_of" class="form-control" value="{{ as_of|date:'Y-m-d' }}">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-outline-light w-100">Применить</button>
+        </div>
+        <div class="col-md-7 small text-muted">
+            {% if settings.last_rates_sync_at %}Курсы: {{ settings.last_rates_sync_at|date:'d.m.Y H:i' }}{% else %}Курсы не загружались{% endif %}
+            ·
+            {% if settings.last_tx_sync_at %}Покупки: {{ settings.last_tx_sync_at|date:'d.m.Y H:i' }}{% else %}Покупки не синхронизировались{% endif %}
+            · Кол-во = баланс Unified Trading на Bybit
+        </div>
+    </form>
+
+    <div class="d-flex gap-3 mb-4 flex-wrap">
+        <div class="crypto-stat">
+            <div class="label">All-time profit</div>
+            <div class="value {% if portfolio.total_profit > 0 %}profit-pos{% elif portfolio.total_profit < 0 %}profit-neg{% endif %}">
+                {% if portfolio.total_profit > 0 %}+{% endif %}${{ portfolio.total_profit|fmt_decimal }}
+            </div>
+            <div class="sub {% if portfolio.total_profit > 0 %}profit-pos{% elif portfolio.total_profit < 0 %}profit-neg{% endif %}">{{ portfolio.total_profit_pct|fmt_pct }}</div>
+        </div>
+        <div class="crypto-stat">
+            <div class="label">Cost basis</div>
+            <div class="value">${{ portfolio.total_cost|fmt_decimal }}</div>
+        </div>
+        {% if portfolio.best %}
+        <div class="crypto-stat">
+            <div class="label">Best</div>
+            <div class="value">{{ portfolio.best.symbol }}</div>
+            <div class="sub {% if portfolio.best.profit_abs > 0 %}profit-pos{% else %}profit-neg{% endif %}">
+                {% if portfolio.best.profit_abs > 0 %}+{% endif %}${{ portfolio.best.profit_abs|fmt_decimal }} ({{ portfolio.best.profit_pct|fmt_pct }})
+            </div>
+        </div>
+        {% endif %}
+        {% if portfolio.worst %}
+        <div class="crypto-stat">
+            <div class="label">Worst</div>
+            <div class="value">{{ portfolio.worst.symbol }}</div>
+            <div class="sub profit-neg">${{ portfolio.worst.profit_abs|fmt_decimal }} ({{ portfolio.worst.profit_pct|fmt_pct }})</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+            <div class="crypto-panel h-100">
+                <div class="panel-head">Allocation</div>
+                <div class="panel-body">
+                    {% if portfolio.assets %}
+                    <div class="crypto-chart-wrap">
+                        <canvas id="allocationChart"></canvas>
+                    </div>
+                    <ul class="allocation-list">
+                        {% for row in portfolio.assets %}
+                        <li>
+                            <a class="asset-link coin-badge" href="{% url 'crypto:asset' row.symbol %}">
+                                <img src="https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/{{ row.symbol|lower }}.svg" alt="" onerror="this.style.display='none'">
+                                {{ row.symbol }}
+                            </a>
+                            <span>{{ row.allocation_pct|fmt_decimal:2 }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="crypto-empty">Нет позиций. Нажмите «Синхр. покупки Bybit».</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="crypto-panel h-100">
+                <div class="panel-head">Assets</div>
+                <div class="panel-body table-responsive">
+                    <table class="table crypto-table table-borderless align-middle">
+                        <thead>
+                            <tr>
+                                <th>Актив</th>
+                                <th class="text-end">Кол-во</th>
+                                <th class="text-end">Avg buy</th>
+                                <th class="text-end">Цена</th>
+                                <th class="text-end">Стоимость</th>
+                                <th class="text-end">P/L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in portfolio.assets %}
+                            <tr>
+                                <td>
+                                    <a class="asset-link coin-badge" href="{% url 'crypto:asset' row.symbol %}">
+                                        <img src="https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/{{ row.symbol|lower }}.svg" alt="" onerror="this.style.display='none'">
+                                        {{ row.symbol }}
+                                    </a>
+                                </td>
+                                <td class="text-end">{{ row.quantity|fmt_qty }}</td>
+                                <td class="text-end">${{ row.avg_buy_price|fmt_decimal:4 }}</td>
+                                <td class="text-end">${{ row.current_price|fmt_decimal:4 }}</td>
+                                <td class="text-end">${{ row.current_value|fmt_decimal }}</td>
+                                <td class="text-end {% if row.profit_abs > 0 %}profit-pos{% elif row.profit_abs < 0 %}profit-neg{% endif %}">
+                                    {% if row.profit_abs > 0 %}+{% endif %}${{ row.profit_abs|fmt_decimal }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="crypto-empty">Нет данных</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="crypto-panel mb-4">
+        <div class="panel-head">Transactions</div>
+        <div class="panel-body table-responsive">
+            <table class="table crypto-table table-borderless tx-table" id="cryptoTxTable">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Asset</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">Fees</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td><span class="badge {% if tx.tx_type == 'sell' %}bg-danger{% else %}badge-buy{% endif %}">{{ tx.get_tx_type_display }}</span></td>
+                        <td>{{ tx.occurred_at|date:'d.m.Y H:i' }}</td>
+                        <td>
+                            <a class="asset-link coin-badge" href="{% url 'crypto:asset' tx.asset.symbol %}">
+                                <img src="https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/{{ tx.asset.symbol|lower }}.svg" alt="" onerror="this.style.display='none'">
+                                {{ tx.asset.symbol }}
+                            </a>
+                        </td>
+                        <td class="text-end">${{ tx.price_quote|fmt_decimal:4 }}</td>
+                        <td class="text-end">
+                            {% if tx.tx_type == 'sell' %}-{% else %}+{% endif %}{{ tx.quantity|fmt_qty }}
+                            <span class="text-muted">(${{ tx.total_quote|fmt_decimal }}{% if tx.fee_quote %} fee ${{ tx.fee_quote|fmt_decimal:4 }}{% endif %})</span>
+                        </td>
+                        <td class="text-end">${{ tx.fee_quote|fmt_decimal:4 }}</td>
+                        <td>{{ tx.get_source_display }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="crypto-empty">Нет транзакций</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof feather !== 'undefined') feather.replace();
+
+    const allocation = {{ allocation_json|safe }};
+    const ctx = document.getElementById('allocationChart');
+    if (ctx && allocation.length) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: allocation.map(item => item.symbol),
+                datasets: [{
+                    data: allocation.map(item => item.value),
+                    backgroundColor: ['#3b82f6', '#22c55e', '#eab308', '#a855f7', '#ef4444', '#06b6d4', '#f97316', '#64748b'],
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+            },
+        });
+    }
+
+    if (window.jQuery && jQuery.fn.DataTable && document.querySelector('#cryptoTxTable tbody tr td[colspan]') === null) {
+        jQuery('#cryptoTxTable').DataTable({
+            order: [[1, 'desc']],
+            pageLength: 25,
+            language: { url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ru.json' },
+        });
+    }
+});
+</script>
+{% endblock %}

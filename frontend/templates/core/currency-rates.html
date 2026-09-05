@@ -7,7 +7,7 @@
     <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
         <div>
             <h1 class="mb-0">Курсы валют</h1>
-            <p class="text-muted mb-0">Официальные курсы ЦБ РФ, сохраненные по дням.</p>
+            <p class="text-muted mb-0">Курсы ЦБ РФ для фиата и CoinGecko/CMC для криптовалют — в одной таблице.</p>
         </div>
     </div>
 
@@ -47,13 +47,46 @@
                 <div class="col-12">
                     <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 border rounded-3 px-3 py-3">
                         <div>
-                            <h5 class="mb-1">Догрузка новых дат</h5>
+                            <h5 class="mb-1">Догрузка новых дат (ЦБ РФ)</h5>
                             <p class="text-muted mb-0">Обновляет только активные валюты, начиная с последней сохраненной даты по каждой из них.</p>
                         </div>
                         <form method="post" class="currency-rate-sync-form d-flex align-items-center">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="sync_incremental">
-                            <button type="submit" class="btn btn-outline-primary">Обновить новые курсы</button>
+                            <button type="submit" class="btn btn-outline-primary">Обновить курсы ЦБ</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 border rounded-3 px-3 py-3">
+                        <div>
+                            <h5 class="mb-1">История криптовалют с даты (Binance)</h5>
+                            <p class="text-muted mb-0">
+                                Единоразовая догрузка по дням. Источник — дневные свечи Binance Spot (бесплатно, без ключа).
+                                Сначала загрузите <strong>USD</strong> из ЦБ с той же даты. Монеты без пары на Binance (например GRAM) будут пропущены.
+                            </p>
+                        </div>
+                        <form method="post" class="currency-rate-sync-form d-flex flex-wrap align-items-end gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="sync_crypto_historical">
+                            <div>
+                                <label class="form-label small mb-1">Дата с</label>
+                                <input type="date" class="form-control" name="crypto_start_date" value="2020-01-01">
+                            </div>
+                            <button type="submit" class="btn btn-success">Загрузить историю крипты</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 border rounded-3 px-3 py-3">
+                        <div>
+                            <h5 class="mb-1">Курсы криптовалют на сегодня</h5>
+                            <p class="text-muted mb-0">CMC при наличии API key, иначе CoinGecko. Сохраняется в RUB через USD ЦБ.</p>
+                        </div>
+                        <form method="post" class="currency-rate-sync-form d-flex align-items-center">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="sync_crypto">
+                            <button type="submit" class="btn btn-outline-success">Обновить курсы крипты</button>
                         </form>
                     </div>
                 </div>

@@ -4,6 +4,14 @@
         <div class="nav-link-icon"><i data-feather="activity"></i></div>
         Аналитика
     </a>
+    <a class="nav-link" href="{% url 'crypto:dashboard' %}">
+        <div class="nav-link-icon"><i data-feather="disc"></i></div>
+        Криптопортфель
+    </a>
+    <a class="nav-link" href="{% url 'capital:dashboard' %}">
+        <div class="nav-link-icon"><i data-feather="pie-chart"></i></div>
+        Капитал
+    </a>
     <a class="nav-link" href="{% url 'forecasting:month-summary' %}">
         <div class="nav-link-icon"><i data-feather="trending-up"></i></div>
         Прогноз

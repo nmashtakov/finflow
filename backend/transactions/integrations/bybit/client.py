@@ -151,3 +151,6 @@ class BybitV5Client:
             ],
             params=params,
         )
+
+    def fetch_wallet_balance(self, account_type: str = "UNIFIED") -> Dict[str, Any]:
+        return self._get("/v5/account/wallet-balance", params={"accountType": account_type})

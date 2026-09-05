@@ -1,0 +1,166 @@
+{% extends "components/base.html" %}
+
+{% block title %}Капитал — снимки{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Ввод снимков</h1>
+            <p class="text-muted mb-0">Фиксация стоимости позиций на дату. Пропущенные дни на графике заполняются последним значением.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="{% url 'capital:dashboard' %}?as_of={{ snapshot_date|date:'Y-m-d' }}">← Капитал</a>
+            <a class="btn btn-outline-secondary" href="{% url 'capital:settings' %}">Справочники</a>
+        </div>
+    </div>
+
+    <form method="get" class="card mb-3">
+        <div class="card-body row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Дата среза</label>
+                <input type="date" name="date" class="form-control" value="{{ snapshot_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary">Открыть</button>
+            </div>
+        </div>
+    </form>
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_all">
+        <input type="hidden" name="snapshot_date" value="{{ snapshot_date|date:'Y-m-d' }}">
+
+        <div class="d-flex gap-2 mb-3">
+            <button type="submit" class="btn btn-success">Сохранить все</button>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Инструменты (крипта, биржа)</div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Проект</th>
+                            <th>Позиция</th>
+                            <th>Класс</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Последний снимок</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in instrument_rows %}
+                        <tr>
+                            <td>{{ row.project_name }}</td>
+                            <td>{{ row.name }}<input type="hidden" name="position_id" value="{{ row.position_id }}"></td>
+                            <td>{{ row.asset_class_label|default:"—" }}</td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_quantity" value="{% if row.exact_snapshot and row.exact_snapshot.quantity != None %}{{ row.exact_snapshot.quantity }}{% elif row.snapshot and row.snapshot.quantity != None %}{{ row.snapshot.quantity }}{% endif %}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_unit_price" value="{% if row.exact_snapshot and row.exact_snapshot.unit_price != None %}{{ row.exact_snapshot.unit_price }}{% elif row.snapshot and row.snapshot.unit_price != None %}{{ row.snapshot.unit_price }}{% endif %}"></td>
+                            <td class="text-muted small">{% if row.snapshot_date %}{{ row.snapshot_date|date:'d.m.Y' }}{% else %}—{% endif %}{% if row.has_exact_snapshot %} <span class="badge bg-primary">сегодня</span>{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-muted">Нет позиций</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Денежные средства (из snapshots счетов)</div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Счёт</th><th class="text-end">Баланс</th><th>Дата снимка</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in bank_rows %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end">{% if row.native_value != None %}{{ row.native_value|floatformat:2 }} {{ row.currency }}{% else %}—{% endif %}</td>
+                            <td>{% if row.snapshot_date %}{{ row.snapshot_date|date:'d.m.Y' }}{% else %}—{% endif %}</td>
+                            <td><a href="{% url 'accounts_directory' %}?balance_target_date={{ snapshot_date|date:'Y-m-d' }}" class="small">Счета →</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-muted">Нет bank_link позиций. <a href="{% url 'capital:settings' %}?tab=positions">Добавить</a></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Товарный остаток</div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr><th>Проект</th><th>Позиция</th><th>Сумма</th><th>Последний снимок</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in inventory_rows %}
+                        <tr>
+                            <td>{{ row.project_name }}</td>
+                            <td>{{ row.name }}<input type="hidden" name="position_id" value="{{ row.position_id }}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_total_value" value="{% if row.exact_snapshot %}{{ row.exact_snapshot.total_value }}{% elif row.snapshot %}{{ row.snapshot.total_value }}{% endif %}"></td>
+                            <td class="text-muted small">{% if row.snapshot_date %}{{ row.snapshot_date|date:'d.m.Y' }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-muted">Нет позиций</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Steam</div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Аккаунт</th>
+                            <th>Сайт</th>
+                            <th>Balance</th>
+                            <th>Skins</th>
+                            <th>Coeff</th>
+                            <th>Adjusted</th>
+                            <th>Последний</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in steam_rows %}
+                        <tr>
+                            <td>{{ row.steam_account_code }}</td>
+                            <td>{{ row.withdrawal_site_name }}<input type="hidden" name="position_id" value="{{ row.position_id }}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_site_balance" value="{% if row.exact_snapshot %}{{ row.exact_snapshot.site_balance|default:'' }}{% elif row.snapshot %}{{ row.snapshot.site_balance|default:'' }}{% endif %}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_skins_value" value="{% if row.exact_snapshot %}{{ row.exact_snapshot.skins_value|default:'' }}{% elif row.snapshot %}{{ row.snapshot.skins_value|default:'' }}{% endif %}"></td>
+                            <td><input type="text" class="form-control form-control-sm" name="pos_{{ row.position_id }}_coefficient" placeholder="{% if row.position.withdrawal_site %}{{ row.position.withdrawal_site.default_coefficient }}{% else %}1{% endif %}" value="{% if row.exact_snapshot and row.exact_snapshot.coefficient != None %}{{ row.exact_snapshot.coefficient }}{% elif row.snapshot and row.snapshot.coefficient != None %}{{ row.snapshot.coefficient }}{% endif %}"></td>
+                            <td class="text-end">{% if row.native_value != None %}{{ row.native_value|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td class="text-muted small">{% if row.snapshot_date %}{{ row.snapshot_date|date:'d.m.Y' }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-muted">Нет Steam-позиций. Добавьте аккаунты и сайты в <a href="{% url 'capital:settings' %}">справочниках</a>.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success mb-4">Сохранить все</button>
+    </form>
+
+    <form method="post" class="mb-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="copy_previous">
+        <input type="hidden" name="snapshot_date" value="{{ snapshot_date|date:'Y-m-d' }}">
+        <button type="submit" class="btn btn-outline-secondary">Скопировать с предыдущей даты</button>
+        <span class="text-muted small ms-2">Заполнит пустые позиции значениями последнего снимка до этой даты.</span>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>if (typeof feather !== 'undefined') feather.replace();</script>
+{% endblock %}

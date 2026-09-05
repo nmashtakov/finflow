@@ -1,0 +1,130 @@
+{% extends "components/base.html" %}
+
+{% block title %}Закупка{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">Закупка от {{ purchase.purchase_date|date:"d.m.Y" }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'crm:purchases' %}" class="btn btn-outline-secondary">Назад к закупкам</a>
+            <a href="{% url 'crm:purchase_edit' purchase.id %}" class="btn btn-primary">Редактировать</a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Склад</div>
+                    <div class="fw-semibold">{{ purchase.warehouse.name|default:"—" }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Контрагент</div>
+                    <div class="fw-semibold">{{ purchase.counterparty.name|default:"—" }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Статус</div>
+                    <div>
+                        {% if purchase.status == 'posted' %}
+                        <span class="badge bg-success">Проведена</span>
+                        {% elif purchase.status == 'draft' %}
+                        <span class="badge bg-warning text-dark">Черновик</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Отменена</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Создал</div>
+                    <div class="fw-semibold">{{ purchase.created_by.username|default:"—" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Позиции</div>
+                    <div class="fs-4">{{ purchase_line_count }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Общее количество</div>
+                    <div class="fs-4">{{ purchase_total_quantity }} шт.</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Сумма закупки</div>
+                    <div class="fs-4">{{ purchase_total_amount|floatformat:2 }} {{ organization.base_currency }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if purchase.comment %}
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <div class="text-muted small mb-1">Комментарий</div>
+            <div>{{ purchase.comment|linebreaksbr }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Товар</th>
+                            <th>Количество</th>
+                            <th>Цена / шт.</th>
+                            <th>Доп. расходы</th>
+                            <th>Доп. расходы / шт.</th>
+                            <th>Сумма строки</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in purchase_items %}
+                        <tr>
+                            <td>{{ item.product.sku }} — {{ item.product.name }}</td>
+                            <td>{{ item.quantity }} шт.</td>
+                            <td>{{ item.unit_cost }} {{ organization.base_currency }}</td>
+                            <td>{{ item.extra_cost_total }} {{ organization.base_currency }}</td>
+                            <td>{{ item.extra_cost_per_unit }} {{ organization.base_currency }}</td>
+                            <td>{{ item.line_total|floatformat:2 }} {{ organization.base_currency }}</td>
+                            <td>{{ item.comment|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

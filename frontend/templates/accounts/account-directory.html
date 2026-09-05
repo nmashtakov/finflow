@@ -2,6 +2,52 @@
 
 {% block title %}Справочники — Счета{% endblock %}
 
+{% block extra_css %}
+<style>
+    .balance-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1;
+    }
+
+    .balance-status-badge--done {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .balance-status-badge--pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .balance-row--done > td {
+        background: #f3fbf6;
+    }
+
+    .balance-row--pending > td {
+        background: #fff9eb;
+    }
+
+    .balance-row--done:hover > td,
+    .balance-row--pending:hover > td {
+        background-image: linear-gradient(rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0.03));
+    }
+
+    .balance-account-name {
+        font-weight: 600;
+    }
+
+    .balance-account-meta {
+        margin-top: 0.35rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4">
     <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
@@ -112,34 +158,74 @@
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                 <div>
                     <h4 class="mb-1">Сверка балансов</h4>
-                    <p class="text-muted mb-0">Заполни текущие остатки по активным счетам. Если фактический баланс отличается от расчётного, значит по счёту не хватает операций или есть ошибка.</p>
+                    <p class="text-muted mb-0">Показывает, сходятся ли счета на конец выбранного дня. Если фиксация на дату отличается от расчётного остатка, значит по счёту не хватает операций или есть ошибка.</p>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span class="balance-status-badge balance-status-badge--done">
+                            Зафиксировано на {{ balance_target_date|date:"d.m.Y" }}: {{ balance_snapshot_done_count }} из {{ balance_snapshot_total_count }}
+                        </span>
+                        {% if balance_snapshot_pending_count %}
+                        <span class="balance-status-badge balance-status-badge--pending">
+                            Осталось заполнить: {{ balance_snapshot_pending_count }}
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
-                <button class="btn btn-outline-secondary btn-sm" type="button" id="toggleBalanceHistory">
-                    История фиксаций
-                </button>
+                <div class="d-flex flex-wrap justify-content-end gap-2">
+                    <form method="get" class="d-flex flex-wrap align-items-end gap-2">
+                        <div>
+                            <label class="form-label form-label-sm mb-1" for="balanceTargetDate">Дата сверки</label>
+                            <input type="date"
+                                   id="balanceTargetDate"
+                                   name="balance_target_date"
+                                   class="form-control form-control-sm"
+                                   value="{{ balance_target_date|date:'Y-m-d' }}"
+                                   max="{% now 'Y-m-d' %}">
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Показать</button>
+                    </form>
+                    <button class="btn btn-outline-secondary btn-sm" type="button" id="toggleBalanceHistory">
+                        История фиксаций
+                    </button>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-striped align-middle">
                     <thead>
                         <tr>
                             <th>Счёт</th>
-                            <th>Последняя фиксация</th>
-                            <th>Последняя операция</th>
-                            <th>Расчётный баланс сейчас</th>
+                            <th>Фиксация на дату</th>
+                            <th>Последняя операция до даты</th>
+                            <th>Расчётный баланс на дату</th>
                             <th>Что проверить</th>
                             <th class="text-end">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in balance_summary %}
-                        <tr>
-                            <td>{{ row.account.name }}</td>
+                        <tr class="{% if row.has_target_snapshot %}balance-row--done{% else %}balance-row--pending{% endif %}">
                             <td>
-                                {% if row.latest_snapshot %}
-                                    <div>{{ row.latest_snapshot.snapshot_date|date:"d.m.Y" }}</div>
-                                    <div class="text-muted">{{ row.latest_snapshot.balance|floatformat:2 }} {{ row.account.currency }}</div>
+                                <div class="balance-account-name">{{ row.account.name }}</div>
+                                <div class="balance-account-meta">
+                                    {% if row.has_target_snapshot %}
+                                        <span class="balance-status-badge balance-status-badge--done">Зафиксирован на дату</span>
+                                    {% elif row.previous_snapshot %}
+                                        <span class="balance-status-badge balance-status-badge--pending">Нужно зафиксировать на дату</span>
+                                    {% else %}
+                                        <span class="balance-status-badge balance-status-badge--pending">Ждёт первой фиксации</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if row.target_snapshot %}
+                                    <div>{{ row.target_snapshot.snapshot_date|date:"d.m.Y" }}</div>
+                                    <div class="text-muted">{{ row.target_snapshot.balance|floatformat:2 }} {{ row.account.currency }}</div>
                                 {% else %}
-                                    <span class="text-muted">Нет фиксации</span>
+                                    <div class="text-muted">Нет фиксации на {{ balance_target_date|date:"d.m.Y" }}</div>
+                                    {% if row.previous_snapshot %}
+                                        <div class="text-muted small">Опора: {{ row.previous_snapshot.snapshot_date|date:"d.m.Y" }} · {{ row.previous_snapshot.balance|floatformat:2 }} {{ row.account.currency }}</div>
+                                    {% elif row.first_snapshot %}
+                                        <div class="text-muted small">Первая доступная: {{ row.first_snapshot.snapshot_date|date:"d.m.Y" }}</div>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -150,19 +236,23 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if row.expected_now is not None %}
-                                    {{ row.expected_now|floatformat:2 }} {{ row.account.currency }}
+                                {% if row.expected_on_target is not None %}
+                                    {{ row.expected_on_target|floatformat:2 }} {{ row.account.currency }}
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if not row.latest_snapshot %}
+                                {% if not row.target_snapshot and not row.previous_snapshot %}
                                     <span class="badge bg-warning text-dark">Нужна первая фиксация</span>
+                                {% elif not row.target_snapshot %}
+                                    <span class="badge bg-warning text-dark">Нет фиксации на дату</span>
                                 {% elif row.has_check_difference %}
                                     <span class="{% if row.check_amount > 0 %}text-success{% else %}text-danger{% endif %}">
                                         {{ row.check_amount|floatformat:2 }} {{ row.account.currency }}
                                     </span>
+                                {% elif not row.previous_snapshot %}
+                                    <span class="badge bg-secondary">Базовая фиксация</span>
                                 {% else %}
                                     <span class="badge bg-success">Сверено</span>
                                 {% endif %}
@@ -175,19 +265,20 @@
                                             data-bs-target="#balanceSnapshotModal"
                                             data-account-id="{{ row.account.id }}"
                                             data-account-name="{{ row.account.name }}"
-                                            data-snapshot-id=""
-                                            data-snapshot-date=""
-                                            data-snapshot-balance=""
-                                            data-snapshot-note="">
-                                        Зафиксировать баланс
+                                            data-snapshot-id="{% if row.target_snapshot %}{{ row.target_snapshot.id }}{% endif %}"
+                                            data-snapshot-date="{% if row.target_snapshot %}{{ row.target_snapshot.snapshot_date|date:'Y-m-d' }}{% else %}{{ balance_target_date|date:'Y-m-d' }}{% endif %}"
+                                            data-snapshot-balance="{% if row.target_snapshot %}{{ row.target_snapshot.balance }}{% endif %}"
+                                            data-snapshot-note="{% if row.target_snapshot %}{{ row.target_snapshot.note }}{% endif %}">
+                                        {% if row.target_snapshot %}Редактировать фиксацию{% else %}Зафиксировать баланс{% endif %}
                                     </button>
                                     <form method="post" class="d-inline">
                                         {% csrf_token %}
                                         <input type="hidden" name="copy_balance_snapshot" value="1">
                                         <input type="hidden" name="account_id" value="{{ row.account.id }}">
+                                        <input type="hidden" name="balance_target_date" value="{{ balance_target_date|date:'Y-m-d' }}">
                                         <button type="submit"
                                                 class="btn btn-outline-secondary btn-sm"
-                                                {% if not row.latest_snapshot or row.has_today_snapshot %}disabled{% endif %}>
+                                                {% if not row.can_copy_snapshot %}disabled{% endif %}>
                                             Не поменялся
                                         </button>
                                     </form>
@@ -244,6 +335,7 @@
                                 <form method="post" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="delete_balance_snapshot" value="1">
+                                    <input type="hidden" name="balance_target_date" value="{{ balance_target_date|date:'Y-m-d' }}">
                                     <input type="hidden" name="snapshot_id" value="{{ snapshot.id }}">
                                     <button type="submit" class="btn btn-datatable btn-icon btn-transparent-dark" title="Удалить фиксацию">
                                         <i data-feather="trash-2"></i>
@@ -269,6 +361,7 @@
         <form method="post" class="modal-content">
             {% csrf_token %}
             <input type="hidden" name="save_balance_snapshot" value="1">
+            <input type="hidden" name="balance_target_date" value="{{ balance_target_date|date:'Y-m-d' }}">
             <input type="hidden" name="account_id" id="balanceSnapshotAccountId" value="{{ snapshot_modal_account_id|default:'' }}">
             <input type="hidden" name="snapshot_id" id="balanceSnapshotId" value="{{ snapshot_modal_id|default:'' }}">
             <div class="modal-header">

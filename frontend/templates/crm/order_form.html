@@ -1,0 +1,782 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .crm-order-row[hidden] {
+        display: none !important;
+    }
+    .crm-required {
+        color: #d63939;
+    }
+    .crm-order-section + .crm-order-section {
+        border-top: 1px solid #edf2f8;
+        margin-top: 2rem;
+        padding-top: 2rem;
+    }
+    .crm-order-section__title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .crm-order-section__hint {
+        color: #8a94a6;
+        font-size: 0.92rem;
+        margin-bottom: 1.25rem;
+    }
+    .crm-price-hint {
+        min-height: 1rem;
+    }
+    .crm-product-picker-trigger {
+        width: 100%;
+        min-height: 4.75rem;
+        border: 1px solid #dce4f0;
+        border-radius: 1rem;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 0.85rem 1rem;
+        text-align: left;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    }
+    .crm-product-picker-trigger:hover {
+        border-color: #95aed6;
+        box-shadow: 0 0.5rem 1.3rem rgba(20, 45, 90, 0.08);
+        transform: translateY(-1px);
+    }
+    .crm-product-picker-trigger__thumb {
+        width: 3.2rem;
+        height: 3.2rem;
+        flex: 0 0 3.2rem;
+        border-radius: 0.9rem;
+        border: 1px solid #dfe6f2;
+        background: #ffffff;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .crm-product-picker-trigger__thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .crm-product-picker-trigger__thumb-empty {
+        color: #a0a9b8;
+        font-size: 1.4rem;
+        line-height: 1;
+    }
+    .crm-product-picker-trigger__content {
+        min-width: 0;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.18rem;
+    }
+    .crm-product-picker-trigger__label {
+        color: #1f2a3d;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+    .crm-product-picker-trigger__meta {
+        color: #8a94a6;
+        font-size: 0.9rem;
+        line-height: 1.25;
+    }
+    .crm-product-picker-trigger__action {
+        color: #2563eb;
+        font-size: 0.92rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .crm-product-picker-search {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #ffffff;
+        padding-bottom: 0.75rem;
+    }
+    .crm-product-picker-list {
+        display: grid;
+        gap: 0.75rem;
+        max-height: 26rem;
+        overflow: auto;
+        padding-right: 0.25rem;
+    }
+    .crm-product-picker-item {
+        width: 100%;
+        border: 1px solid #e0e7f1;
+        border-radius: 1rem;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 0.85rem 1rem;
+        text-align: left;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    }
+    .crm-product-picker-item:hover {
+        border-color: #8db1ea;
+        box-shadow: 0 0.6rem 1.5rem rgba(37, 99, 235, 0.08);
+        transform: translateY(-1px);
+    }
+    .crm-product-picker-item__thumb {
+        width: 3.75rem;
+        height: 3.75rem;
+        flex: 0 0 3.75rem;
+        border-radius: 1rem;
+        border: 1px solid #dfe6f2;
+        background: #ffffff;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .crm-product-picker-item__thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .crm-product-picker-item__thumb-empty {
+        color: #a0a9b8;
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+    .crm-product-picker-item__body {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .crm-product-picker-item__sku {
+        color: #8a94a6;
+        font-size: 0.84rem;
+        line-height: 1.2;
+    }
+    .crm-product-picker-item__name {
+        color: #1f2a3d;
+        font-weight: 600;
+        line-height: 1.35;
+        margin-top: 0.15rem;
+    }
+    .crm-product-picker-item__meta {
+        color: #64748b;
+        font-size: 0.88rem;
+        line-height: 1.25;
+        margin-top: 0.2rem;
+    }
+    .crm-product-picker-item__choose {
+        color: #2563eb;
+        font-size: 0.9rem;
+        font-weight: 600;
+        white-space: nowrap;
+        padding-left: 0.5rem;
+    }
+    .crm-order-summary-card {
+        border-radius: 1rem;
+        border: 1px solid #e6ecf5;
+        background: #f8fbff;
+        padding: 1rem 1.1rem;
+        height: 100%;
+    }
+    .crm-order-summary-card__label {
+        color: #8a94a6;
+        font-size: 0.82rem;
+        margin-bottom: 0.25rem;
+    }
+    .crm-order-summary-card__value {
+        color: #1f2a3d;
+        font-size: 1.15rem;
+        font-weight: 700;
+    }
+    .crm-order-summary-card__value--warning {
+        color: #b45309;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mt-4 mb-4">
+        <div>
+            <h1 class="mb-0">{{ page_title }}</h1>
+            <p class="text-muted mb-0">Организация: {{ organization.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if order %}
+            <a href="{% url 'crm:order_detail' order.id %}" class="btn btn-outline-secondary">Просмотр</a>
+            {% endif %}
+            <a href="{% url 'crm:orders' %}" class="btn btn-outline-secondary">Назад к заказам</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'warning' in message.tags %}alert-warning{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %} mb-3">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-12 col-xxl-9">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4 p-xl-5">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        {% if not order %}{{ form.status }}{% endif %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if item_formset.non_form_errors %}
+                        <div class="alert alert-danger mb-3">
+                            {% for error in item_formset.non_form_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <section class="crm-order-section">
+                            <div class="crm-order-section__title">Заказ</div>
+                            <div class="crm-order-section__hint">Источник продаж, дата заказа и базовые параметры.</div>
+                            <div class="row g-3">
+                                {% if order %}
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Наш номер заказа</label>
+                                    <input type="text" class="form-control" value="{{ order.internal_order_number }}" disabled>
+                                </div>
+                                {% endif %}
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.external_order_number.id_for_label }}">{{ form.external_order_number.label }}</label>
+                                    {{ form.external_order_number }}
+                                    {% for error in form.external_order_number.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.order_date.id_for_label }}">{{ form.order_date.label }} <span class="crm-required">*</span></label>
+                                    {{ form.order_date }}
+                                    {% for error in form.order_date.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.sales_channel.id_for_label }}">{{ form.sales_channel.label }} <span class="crm-required">*</span></label>
+                                    {{ form.sales_channel }}
+                                    {% for error in form.sales_channel.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.delivery_method.id_for_label }}">{{ form.delivery_method.label }}</label>
+                                    {{ form.delivery_method }}
+                                    {% for error in form.delivery_method.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.payment_status.id_for_label }}">{{ form.payment_status.label }} <span class="crm-required">*</span></label>
+                                    {{ form.payment_status }}
+                                    {% for error in form.payment_status.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                {% if order %}
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="{{ form.status.id_for_label }}">{{ form.status.label }} <span class="crm-required">*</span></label>
+                                    {{ form.status }}
+                                    {% for error in form.status.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </section>
+
+                        <section class="crm-order-section">
+                            <div class="crm-order-section__title">Клиент</div>
+                            <div class="crm-order-section__hint">Можно выбрать клиента из существующей базы или заполнить контакт вручную.</div>
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label" for="{{ form.customer_counterparty.id_for_label }}">{{ form.customer_counterparty.label }}</label>
+                                    {{ form.customer_counterparty }}
+                                    {% for error in form.customer_counterparty.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label" for="{{ form.customer_name.id_for_label }}">{{ form.customer_name.label }}</label>
+                                    {{ form.customer_name }}
+                                    {% for error in form.customer_name.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label" for="{{ form.customer_phone.id_for_label }}">{{ form.customer_phone.label }}</label>
+                                    {{ form.customer_phone }}
+                                    {% for error in form.customer_phone.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label" for="{{ form.customer_contact.id_for_label }}">{{ form.customer_contact.label }}</label>
+                                    {{ form.customer_contact }}
+                                    {% for error in form.customer_contact.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label" for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
+                                    {{ form.comment }}
+                                    {% for error in form.comment.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="crm-order-section">
+                            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-3">
+                                <div>
+                                    <div class="crm-order-section__title mb-1">Товары заказа</div>
+                                    <div class="crm-order-section__hint mb-0">Цена подтягивается из канала продаж, если она задана в карточке товара.</div>
+                                </div>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-add-order-row>Добавить строку</button>
+                            </div>
+
+                            {{ item_formset.management_form }}
+                            <div class="vstack gap-3" data-order-formset>
+                                {% for row_form in item_formset %}
+                                <div class="card border crm-order-row" data-order-row>
+                                    <div class="card-body p-3 p-lg-4">
+                                        <div class="d-none">{{ row_form.DELETE }}</div>
+                                        <div class="row g-3">
+                                            <div class="col-12 col-xl-6">
+                                                <label class="form-label">{{ row_form.product.label }} <span class="crm-required">*</span></label>
+                                                <div class="d-none">{{ row_form.product }}</div>
+                                                <button type="button" class="crm-product-picker-trigger" data-open-product-picker>
+                                                    <span class="crm-product-picker-trigger__thumb" data-selected-product-thumb>
+                                                        <span class="crm-product-picker-trigger__thumb-empty">+</span>
+                                                    </span>
+                                                    <span class="crm-product-picker-trigger__content">
+                                                        <span class="crm-product-picker-trigger__label" data-selected-product-label>Выбрать товар</span>
+                                                        <span class="crm-product-picker-trigger__meta" data-selected-product-meta>Откроется каталог с поиском.</span>
+                                                    </span>
+                                                    <span class="crm-product-picker-trigger__action">Выбрать</span>
+                                                </button>
+                                                {% for error in row_form.product.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-sm-4 col-xl-2">
+                                                <label class="form-label" for="{{ row_form.quantity.id_for_label }}">{{ row_form.quantity.label }} <span class="crm-required">*</span></label>
+                                                {{ row_form.quantity }}
+                                                {% for error in row_form.quantity.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-sm-8 col-xl-3">
+                                                <label class="form-label" for="{{ row_form.sale_price.id_for_label }}">{{ row_form.sale_price.label }}</label>
+                                                {{ row_form.sale_price }}
+                                                <div class="small text-muted mt-1 crm-price-hint" data-price-hint></div>
+                                                {% for error in row_form.sale_price.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col-12 col-xl-1 d-flex align-items-end">
+                                                <button type="button" class="btn btn-outline-danger w-100" data-remove-order-row>Удалить</button>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label" for="{{ row_form.comment.id_for_label }}">{{ row_form.comment.label }}</label>
+                                                {{ row_form.comment }}
+                                                {% for error in row_form.comment.errors %}
+                                                <div class="text-danger small mt-1">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        {% if order_summary %}
+                        <section class="crm-order-section">
+                            <div class="crm-order-section__title">Результат по заказу</div>
+                            <div class="crm-order-section__hint">Резерв и предварительная валовая прибыль пересчитываются после сохранения.</div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6 col-xl-3">
+                                    <div class="crm-order-summary-card">
+                                        <div class="crm-order-summary-card__label">Статус резерва</div>
+                                        <div class="crm-order-summary-card__value">{{ order_summary.reservation_status_label }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6 col-xl-3">
+                                    <div class="crm-order-summary-card">
+                                        <div class="crm-order-summary-card__label">Сумма продажи</div>
+                                        <div class="crm-order-summary-card__value">{{ order_summary.total_sale_amount|floatformat:2 }} {{ organization.base_currency }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6 col-xl-3">
+                                    <div class="crm-order-summary-card">
+                                        <div class="crm-order-summary-card__label">Себестоимость резерва</div>
+                                        <div class="crm-order-summary-card__value">{{ order_summary.total_reserved_cost|floatformat:2 }} {{ organization.base_currency }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6 col-xl-3">
+                                    <div class="crm-order-summary-card">
+                                        <div class="crm-order-summary-card__label">Предварительная валовая прибыль</div>
+                                        <div class="crm-order-summary-card__value">{{ order_summary.gross_profit|floatformat:2 }} {{ organization.base_currency }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if order_summary.missing_quantity_total %}
+                            <div class="alert alert-warning mt-3 mb-0">
+                                Не хватает остатка: {{ order_summary.missing_quantity_total }} шт.
+                            </div>
+                            {% endif %}
+                        </section>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between align-items-center gap-3 mt-4">
+                            <a href="{% url 'crm:orders' %}" class="btn btn-outline-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="crmProductPickerModal" tabindex="-1" aria-labelledby="crmProductPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="crmProductPickerModalLabel">Выбор товара</h5>
+                    <div class="text-muted small">Показываются текущие товары организации. Доступен поиск по SKU и названию.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <div class="crm-product-picker-search">
+                    <input
+                        type="search"
+                        class="form-control"
+                        placeholder="Поиск по SKU или названию"
+                        data-product-picker-search
+                    >
+                </div>
+                <div class="crm-product-picker-list" data-product-picker-list>
+                    {% for product in product_picker_products %}
+                    <button
+                        type="button"
+                        class="crm-product-picker-item"
+                        data-picker-product
+                        data-product-id="{{ product.id }}"
+                        data-product-sku="{{ product.sku }}"
+                        data-product-name="{{ product.name }}"
+                        data-product-stock="{{ product.total_stock_quantity }}"
+                        data-product-search="{{ product.sku|lower }} {{ product.name|lower }}"
+                        {% if product.photo %}data-product-photo-url="{{ product.photo.url }}"{% endif %}
+                    >
+                        <span class="crm-product-picker-item__thumb">
+                            {% if product.photo %}
+                            <img src="{{ product.photo.url }}" alt="{{ product.name }}">
+                            {% else %}
+                            <span class="crm-product-picker-item__thumb-empty">—</span>
+                            {% endif %}
+                        </span>
+                        <span class="crm-product-picker-item__body">
+                            <div class="crm-product-picker-item__sku">{{ product.sku }}</div>
+                            <div class="crm-product-picker-item__name">{{ product.name }}</div>
+                            <div class="crm-product-picker-item__meta">Остаток: {{ product.total_stock_quantity }} шт.</div>
+                        </span>
+                        <span class="crm-product-picker-item__choose">Выбрать</span>
+                    </button>
+                    {% empty %}
+                    <div class="text-muted py-4 text-center">Товаров для выбора пока нет.</div>
+                    {% endfor %}
+                    <div class="text-muted py-4 text-center d-none" data-product-picker-empty>По этому запросу ничего не найдено.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="order-row-template">
+    <div class="card border crm-order-row" data-order-row>
+        <div class="card-body p-3 p-lg-4">
+            <div class="d-none">{{ item_formset.empty_form.DELETE }}</div>
+            <div class="row g-3">
+                <div class="col-12 col-xl-6">
+                    <label class="form-label">{{ item_formset.empty_form.product.label }} <span class="crm-required">*</span></label>
+                    <div class="d-none">{{ item_formset.empty_form.product }}</div>
+                    <button type="button" class="crm-product-picker-trigger" data-open-product-picker>
+                        <span class="crm-product-picker-trigger__thumb" data-selected-product-thumb>
+                            <span class="crm-product-picker-trigger__thumb-empty">+</span>
+                        </span>
+                        <span class="crm-product-picker-trigger__content">
+                            <span class="crm-product-picker-trigger__label" data-selected-product-label>Выбрать товар</span>
+                            <span class="crm-product-picker-trigger__meta" data-selected-product-meta>Откроется каталог с поиском.</span>
+                        </span>
+                        <span class="crm-product-picker-trigger__action">Выбрать</span>
+                    </button>
+                </div>
+                <div class="col-12 col-sm-4 col-xl-2">
+                    <label class="form-label" for="{{ item_formset.empty_form.quantity.id_for_label }}">{{ item_formset.empty_form.quantity.label }} <span class="crm-required">*</span></label>
+                    {{ item_formset.empty_form.quantity }}
+                </div>
+                <div class="col-12 col-sm-8 col-xl-3">
+                    <label class="form-label" for="{{ item_formset.empty_form.sale_price.id_for_label }}">{{ item_formset.empty_form.sale_price.label }}</label>
+                    {{ item_formset.empty_form.sale_price }}
+                    <div class="small text-muted mt-1 crm-price-hint" data-price-hint></div>
+                </div>
+                <div class="col-12 col-xl-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-danger w-100" data-remove-order-row>Удалить</button>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="{{ item_formset.empty_form.comment.id_for_label }}">{{ item_formset.empty_form.comment.label }}</label>
+                    {{ item_formset.empty_form.comment }}
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+{{ product_channel_price_map|json_script:"crm-product-channel-price-map" }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const formsetContainer = document.querySelector('[data-order-formset]');
+        const addRowButton = document.querySelector('[data-add-order-row]');
+        const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
+        const templateElement = document.getElementById('order-row-template');
+        const salesChannelInput = document.getElementById('{{ form.sales_channel.id_for_label }}');
+        const customerCounterpartyInput = document.getElementById('{{ form.customer_counterparty.id_for_label }}');
+        const customerNameInput = document.getElementById('{{ form.customer_name.id_for_label }}');
+        const priceMapElement = document.getElementById('crm-product-channel-price-map');
+        const priceMap = priceMapElement ? JSON.parse(priceMapElement.textContent) : {};
+        const modalElement = document.getElementById('crmProductPickerModal');
+        const productPickerSearch = document.querySelector('[data-product-picker-search]');
+        const productPickerEmpty = document.querySelector('[data-product-picker-empty]');
+        const productPickerRows = Array.from(document.querySelectorAll('[data-picker-product]'));
+        const productMap = {};
+        let activeProductRow = null;
+        let productPickerModal = null;
+
+        if (modalElement && window.bootstrap) {
+            productPickerModal = new bootstrap.Modal(modalElement);
+        }
+
+        productPickerRows.forEach(function (item) {
+            productMap[item.dataset.productId] = {
+                id: item.dataset.productId,
+                sku: item.dataset.productSku,
+                name: item.dataset.productName,
+                stock: item.dataset.productStock,
+                photoUrl: item.dataset.productPhotoUrl || ''
+            };
+        });
+
+        const buildProductThumbMarkup = function (productData) {
+            if (productData && productData.photoUrl) {
+                return '<img src="' + productData.photoUrl + '" alt="' + productData.name.replace(/"/g, '&quot;') + '">';
+            }
+            return '<span class="crm-product-picker-trigger__thumb-empty">—</span>';
+        };
+
+        const renderSelectedProduct = function (row) {
+            if (!row) {
+                return;
+            }
+
+            const productInput = row.querySelector('select[name$="-product"]');
+            const thumb = row.querySelector('[data-selected-product-thumb]');
+            const label = row.querySelector('[data-selected-product-label]');
+            const meta = row.querySelector('[data-selected-product-meta]');
+            const action = row.querySelector('.crm-product-picker-trigger__action');
+            if (!productInput || !thumb || !label || !meta || !action) {
+                return;
+            }
+
+            const productData = productMap[productInput.value];
+            if (!productData) {
+                thumb.innerHTML = '<span class="crm-product-picker-trigger__thumb-empty">+</span>';
+                label.textContent = 'Выбрать товар';
+                meta.textContent = 'Откроется каталог с поиском.';
+                action.textContent = 'Выбрать';
+                return;
+            }
+
+            thumb.innerHTML = buildProductThumbMarkup(productData);
+            label.textContent = productData.sku + ' — ' + productData.name;
+            meta.textContent = 'Остаток: ' + productData.stock + ' шт.';
+            action.textContent = 'Сменить';
+        };
+
+        const syncRowPrice = function (row) {
+            if (!row || !salesChannelInput) {
+                return;
+            }
+
+            const productInput = row.querySelector('select[name$="-product"]');
+            const priceInput = row.querySelector('input[name$="-sale_price"]');
+            const priceHint = row.querySelector('[data-price-hint]');
+            if (!productInput || !priceInput || !priceHint) {
+                return;
+            }
+
+            const productId = productInput.value;
+            const salesChannelId = salesChannelInput.value;
+            if (!productId || !salesChannelId) {
+                priceHint.textContent = 'Выберите источник продаж и товар.';
+                return;
+            }
+
+            const channelPrices = priceMap[String(productId)] || {};
+            const nextPrice = channelPrices[String(salesChannelId)] || '';
+            if (nextPrice) {
+                priceHint.textContent = 'Цена найдена по выбранному источнику.';
+                if (!priceInput.value) {
+                    priceInput.value = nextPrice;
+                }
+            } else {
+                priceHint.textContent = 'Цена по выбранному источнику не найдена.';
+            }
+        };
+
+        const bindRow = function (row) {
+            if (!row) {
+                return;
+            }
+
+            const productInput = row.querySelector('select[name$="-product"]');
+            if (productInput) {
+                productInput.addEventListener('change', function () {
+                    renderSelectedProduct(row);
+                    syncRowPrice(row);
+                });
+            }
+
+            renderSelectedProduct(row);
+            syncRowPrice(row);
+        };
+
+        const hideRow = function (row) {
+            const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+            if (deleteInput) {
+                deleteInput.checked = true;
+            }
+            row.hidden = true;
+        };
+
+        const filterProductPicker = function () {
+            if (!productPickerSearch) {
+                return;
+            }
+
+            const query = productPickerSearch.value.trim().toLowerCase();
+            let visibleCount = 0;
+            productPickerRows.forEach(function (item) {
+                const matches = !query || item.dataset.productSearch.indexOf(query) !== -1;
+                item.classList.toggle('d-none', !matches);
+                if (matches) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (productPickerEmpty) {
+                productPickerEmpty.classList.toggle('d-none', visibleCount !== 0);
+            }
+        };
+
+        if (formsetContainer) {
+            formsetContainer.querySelectorAll('[data-order-row]').forEach(bindRow);
+            formsetContainer.addEventListener('click', function (event) {
+                const removeButton = event.target.closest('[data-remove-order-row]');
+                if (removeButton) {
+                    const row = removeButton.closest('[data-order-row]');
+                    if (row) {
+                        hideRow(row);
+                    }
+                    return;
+                }
+
+                const pickerButton = event.target.closest('[data-open-product-picker]');
+                if (!pickerButton) {
+                    return;
+                }
+
+                activeProductRow = pickerButton.closest('[data-order-row]');
+                if (productPickerSearch) {
+                    productPickerSearch.value = '';
+                    filterProductPicker();
+                }
+                if (productPickerModal) {
+                    productPickerModal.show();
+                }
+            });
+        }
+
+        if (salesChannelInput) {
+            salesChannelInput.addEventListener('change', function () {
+                document.querySelectorAll('[data-order-row]').forEach(syncRowPrice);
+            });
+        }
+
+        if (customerCounterpartyInput && customerNameInput) {
+            customerCounterpartyInput.addEventListener('change', function () {
+                if (!customerNameInput.value.trim() && customerCounterpartyInput.value) {
+                    const selectedOption = customerCounterpartyInput.options[customerCounterpartyInput.selectedIndex];
+                    if (selectedOption) {
+                        customerNameInput.value = selectedOption.text.trim();
+                    }
+                }
+            });
+        }
+
+        if (addRowButton && totalFormsInput && templateElement && formsetContainer) {
+            addRowButton.addEventListener('click', function () {
+                const nextIndex = Number(totalFormsInput.value);
+                const html = templateElement.innerHTML.replace(/__prefix__/g, nextIndex);
+                formsetContainer.insertAdjacentHTML('beforeend', html);
+                totalFormsInput.value = String(nextIndex + 1);
+                const rows = formsetContainer.querySelectorAll('[data-order-row]');
+                bindRow(rows[rows.length - 1]);
+            });
+        }
+
+        if (productPickerSearch) {
+            productPickerSearch.addEventListener('input', filterProductPicker);
+        }
+
+        productPickerRows.forEach(function (item) {
+            item.addEventListener('click', function () {
+                if (!activeProductRow) {
+                    return;
+                }
+
+                const productInput = activeProductRow.querySelector('select[name$="-product"]');
+                if (!productInput) {
+                    return;
+                }
+
+                productInput.value = item.dataset.productId;
+                productInput.dispatchEvent(new Event('change', { bubbles: true }));
+                if (productPickerModal) {
+                    productPickerModal.hide();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

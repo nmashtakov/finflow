@@ -36,6 +36,7 @@ from core.models import (
     UserPreferences,
 )
 from .services.cbr_rates import sync_cbr_rates_full, sync_cbr_rates_incremental
+from .services.crypto_rates import CBR_FIAT_CODES, portfolio_crypto_symbols, sync_crypto_rates_historical, sync_crypto_rates_incremental
 from transactions.models import ImportedTransaction, TransactionImportSession
 
 
@@ -93,10 +94,12 @@ def _format_amount(value, decimals=2):
 
 
 def _build_rate_lookup(tx_list, report_currency):
-    currencies = {tx.currency for tx in tx_list if tx.currency}
+    currencies = {(tx.currency or '').upper() for tx in tx_list if tx.currency}
     currencies.add('RUB')
     if report_currency:
-        currencies.add(report_currency)
+        currencies.add((report_currency or '').upper())
+    if 'USDT' in currencies:
+        currencies.add('USD')
     date_points = [timezone.localtime(tx.date).date() for tx in tx_list]
     if not date_points:
         return {}
@@ -260,6 +263,71 @@ def _build_checklist_context(user, period_start, period_end, tx_list, accounts):
     return {
         'checklist_items': checklist_items,
         'period_account_activity': period_account_activity,
+    }
+
+
+def _build_reimbursement_netting(scope_tx_list, converted_by_tx):
+    tx_ids = {tx.id for tx in scope_tx_list}
+    tx_date_by_id = {tx.id: tx.date for tx in scope_tx_list}
+    expense_contrib = {}
+    reimbursement_offset_ids = set()
+    reimbursement_reduction_by_tx = defaultdict(lambda: Decimal('0'))
+
+    for tx in scope_tx_list:
+        converted_amount = converted_by_tx.get(tx.id)
+        if converted_amount is None:
+            continue
+        subcategory_name = (
+            (tx.expense_link.subcategory.name if tx.expense_link and tx.expense_link.subcategory else '') or ''
+        ).strip().lower()
+        if converted_amount < 0 and subcategory_name != 'перевод между счетами':
+            expense_contrib[tx.id] = abs(converted_amount)
+
+    reimbursement_groups = (
+        TransactionLinkGroup.objects.filter(
+            user=scope_tx_list[0].account.user if scope_tx_list else None,
+            status=TransactionLinkGroup.Status.ACTIVE,
+            link_type=TransactionLinkGroup.LinkType.REIMBURSEMENT,
+            items__transaction_id__in=tx_ids,
+        )
+        .distinct()
+        .prefetch_related('items__transaction')
+    ) if scope_tx_list else []
+
+    for group in reimbursement_groups:
+        primary_ids = []
+        offset_sum = Decimal('0')
+        for item in group.items.all():
+            if item.transaction_id not in tx_ids:
+                continue
+            converted_amount = converted_by_tx.get(item.transaction_id)
+            if item.role == TransactionLinkItem.Role.PRIMARY and converted_amount is not None and converted_amount < 0:
+                primary_ids.append(item.transaction_id)
+            elif item.role == TransactionLinkItem.Role.OFFSET and converted_amount is not None and converted_amount > 0:
+                offset_sum += converted_amount
+                reimbursement_offset_ids.add(item.transaction_id)
+        if not primary_ids or offset_sum <= 0:
+            continue
+        ordered_primary_ids = sorted(
+            [tx_id for tx_id in primary_ids if tx_id in expense_contrib],
+            key=lambda tx_id: (tx_date_by_id.get(tx_id), tx_id),
+        )
+        remaining = offset_sum
+        for primary_id in ordered_primary_ids:
+            if remaining <= 0:
+                break
+            current_abs = expense_contrib.get(primary_id, Decimal('0'))
+            if current_abs <= 0:
+                continue
+            reduction = min(current_abs, remaining)
+            expense_contrib[primary_id] = current_abs - reduction
+            reimbursement_reduction_by_tx[primary_id] += reduction
+            remaining -= reduction
+
+    return {
+        'expense_contrib': expense_contrib,
+        'reimbursement_offset_ids': reimbursement_offset_ids,
+        'reimbursement_reduction_by_tx': reimbursement_reduction_by_tx,
     }
 
 
@@ -966,6 +1034,7 @@ def dashboard_cell_transactions_view(request):
     user = request.user
     month_param = (request.GET.get('month') or '').strip()
     report_currency = (request.GET.get('report_currency') or 'RUB').strip().upper()
+    analytics_mode = (request.GET.get('analytics_mode') or 'net').strip().lower()
     try:
         month_dt = datetime.strptime(month_param, '%Y-%m')
     except ValueError:
@@ -988,14 +1057,18 @@ def dashboard_cell_transactions_view(request):
     currency_values = [(value or '').strip().upper() for value in _query_values(request, 'currency')]
     direction_param = (request.GET.get('direction') or '').strip().lower()
 
-    project_id = request.GET.get('project_id')
-    category_id = request.GET.get('category_id')
-    subcategory_id = request.GET.get('subcategory_id')
-    project_values = [int(project_id)] if project_id and project_id.isdigit() else []
-    category_values = [int(category_id)] if category_id and category_id.isdigit() else []
-    subcategory_values = [int(subcategory_id)] if subcategory_id and subcategory_id.isdigit() else []
+    scope_project_values = [int(value) for value in _query_values(request, 'project') if value.isdigit()]
+    scope_category_values = [int(value) for value in _query_values(request, 'category') if value.isdigit()]
+    scope_subcategory_values = [int(value) for value in _query_values(request, 'subcategory') if value.isdigit()]
 
-    qs = Transaction.objects.filter(
+    drill_project_id = request.GET.get('drill_project_id') or request.GET.get('project_id')
+    drill_category_id = request.GET.get('drill_category_id') or request.GET.get('category_id')
+    drill_subcategory_id = request.GET.get('drill_subcategory_id') or request.GET.get('subcategory_id')
+    drill_project_values = [int(drill_project_id)] if drill_project_id and drill_project_id.isdigit() else []
+    drill_category_values = [int(drill_category_id)] if drill_category_id and drill_category_id.isdigit() else []
+    drill_subcategory_values = [int(drill_subcategory_id)] if drill_subcategory_id and drill_subcategory_id.isdigit() else []
+
+    scope_qs = Transaction.objects.filter(
         account__user=user,
         is_split_parent=False,
         date__range=(period_start, period_end),
@@ -1005,35 +1078,82 @@ def dashboard_cell_transactions_view(request):
         'expense_link__category',
         'expense_link__subcategory',
     )
-    qs = _apply_transaction_filters(
-        qs,
+    scope_qs = _apply_transaction_filters(
+        scope_qs,
         account_values,
-        project_values,
-        category_values,
-        subcategory_values,
+        scope_project_values,
+        scope_category_values,
+        scope_subcategory_values,
         currency_values,
         direction_param,
     )
+    drill_qs = scope_qs
+    if drill_project_values or drill_category_values or drill_subcategory_values:
+        drill_qs = _apply_transaction_filters(
+            drill_qs,
+            [],
+            drill_project_values,
+            drill_category_values,
+            drill_subcategory_values,
+            [],
+            '',
+        )
 
-    tx_list = list(qs.order_by('-date', '-id')[:300])
-    rate_lookup = _build_rate_lookup(tx_list, report_currency)
-    transactions = []
-    total_converted = Decimal('0')
-    converted_count = 0
-    missing_count = 0
-    for tx in tx_list:
-        converted_amount = _convert_amount(
+    scope_tx_list = list(scope_qs.order_by('-date', '-id'))
+    tx_list = list(drill_qs.order_by('-date', '-id')[:300])
+    rate_lookup = _build_rate_lookup(scope_tx_list, report_currency)
+    converted_by_tx = {}
+    for tx in scope_tx_list:
+        converted_by_tx[tx.id] = _convert_amount(
             tx.amount,
             tx.currency,
             report_currency,
             timezone.localtime(tx.date).date(),
             rate_lookup,
         )
+
+    reimbursement_state = _build_reimbursement_netting(scope_tx_list, converted_by_tx)
+    expense_contrib = reimbursement_state['expense_contrib']
+    reimbursement_offset_ids = reimbursement_state['reimbursement_offset_ids']
+    reimbursement_reduction_by_tx = reimbursement_state['reimbursement_reduction_by_tx']
+
+    transactions = []
+    total_converted = Decimal('0')
+    converted_count = 0
+    missing_count = 0
+    for tx in tx_list:
+        converted_amount = converted_by_tx.get(tx.id)
+        is_reimbursement_offset = tx.id in reimbursement_offset_ids
+        reimbursement_reduction = reimbursement_reduction_by_tx.get(tx.id, Decimal('0'))
+
+        effective_amount = converted_amount
+        if analytics_mode == 'net' and converted_amount is not None:
+            subcategory_name = (
+                (tx.expense_link.subcategory.name if tx.expense_link_id and tx.expense_link.subcategory else '') or ''
+            ).strip().lower()
+            if converted_amount > 0 and is_reimbursement_offset:
+                effective_amount = Decimal('0')
+            elif converted_amount < 0 and subcategory_name == 'перевод между счетами':
+                effective_amount = converted_amount
+            elif converted_amount < 0:
+                amount_abs = expense_contrib.get(tx.id)
+                if amount_abs is not None:
+                    effective_amount = -amount_abs
+
         if converted_amount is not None:
-            total_converted += converted_amount
+            total_converted += effective_amount
             converted_count += 1
         else:
             missing_count += 1
+
+        raw_report_amount = (
+            f"{'+' if converted_amount >= 0 else '-'}{_format_amount(abs(converted_amount))} {report_currency}"
+            if converted_amount is not None else 'Нет курса'
+        )
+        effective_report_amount = (
+            f"{'+' if effective_amount >= 0 else '-'}{_format_amount(abs(effective_amount))} {report_currency}"
+            if effective_amount is not None else 'Нет курса'
+        )
         transactions.append({
             'id': tx.id,
             'date': timezone.localtime(tx.date).strftime('%d.%m.%Y %H:%M'),
@@ -1053,18 +1173,23 @@ def dashboard_cell_transactions_view(request):
             'comment': tx.comment or '—',
             'comment_raw': tx.comment or '',
             'expense_link_id': tx.expense_link_id or '',
-            'report_amount': (
-                f"{'+' if converted_amount >= 0 else '-'}{_format_amount(abs(converted_amount))} {report_currency}"
-                if converted_amount is not None else 'Нет курса'
-            ),
+            'report_amount': effective_report_amount,
+            'raw_report_amount': raw_report_amount,
+            'is_reimbursement_offset': is_reimbursement_offset,
+            'is_excluded_in_net': analytics_mode == 'net' and is_reimbursement_offset,
+            'reimbursement_applied_amount': _format_amount(reimbursement_reduction, decimals=0) if reimbursement_reduction > 0 else '',
+            'has_reimbursement_adjustment': analytics_mode == 'net' and reimbursement_reduction > 0,
+            'is_fully_reimbursed': analytics_mode == 'net' and effective_amount == 0 and converted_amount is not None and converted_amount < 0,
         })
 
     return JsonResponse({
         'ok': True,
         'month': period_start.strftime('%m.%Y'),
-        'count': qs.count(),
+        'count': drill_qs.count(),
         'total': _format_amount(total_converted, decimals=0),
+        'total_label': 'сумма с учетом возвратов' if analytics_mode == 'net' else 'сумма',
         'report_currency': report_currency,
+        'analytics_mode': analytics_mode,
         'converted_count': converted_count,
         'missing_count': missing_count,
         'transactions': transactions,
@@ -1348,8 +1473,24 @@ def accounts_directory(request):
         preferences.save(update_fields=['default_account'])
     accounts = Account.objects.filter(user=user).exclude(status='deleted').order_by('status', 'name')
 
+    raw_balance_target_date = request.POST.get('balance_target_date') or request.GET.get('balance_target_date')
+    today = timezone.localdate()
+    if raw_balance_target_date:
+        try:
+            balance_target_date = datetime.strptime(raw_balance_target_date, '%Y-%m-%d').date()
+        except ValueError:
+            balance_target_date = today
+    else:
+        balance_target_date = today
+    if balance_target_date > today:
+        balance_target_date = today
+
+    def redirect_accounts_directory():
+        base_url = reverse('accounts_directory')
+        return redirect(f'{base_url}?balance_target_date={balance_target_date.isoformat()}')
+
     form = AccountForm()
-    balance_form = AccountBalanceSnapshotForm()
+    balance_form = AccountBalanceSnapshotForm(initial={'snapshot_date': balance_target_date})
     edit_forms = {}
     modal_to_open = None
     modal_context = {}
@@ -1364,7 +1505,7 @@ def accounts_directory(request):
                     form.add_error('name', 'Счёт с таким названием уже существует')
                 else:
                     account.save()
-                    return redirect('accounts_directory')
+                    return redirect_accounts_directory()
             modal_to_open = 'accountModal'
         elif 'edit_account' in request.POST:
             account_id = request.POST.get('account_id')
@@ -1376,7 +1517,7 @@ def accounts_directory(request):
                     edit_form.add_error('name', 'Счёт с таким названием уже существует')
                 else:
                     edit_form.save()
-                    return redirect('accounts_directory')
+                    return redirect_accounts_directory()
             edit_forms[account.id] = edit_form
             modal_to_open = f'editAccountModal{account.id}'
         elif 'delete_account' in request.POST:
@@ -1387,13 +1528,13 @@ def accounts_directory(request):
             if preferences.default_account_id == account.id:
                 preferences.default_account = None
                 preferences.save(update_fields=['default_account'])
-            return redirect('accounts_directory')
+            return redirect_accounts_directory()
         elif 'set_default_account' in request.POST:
             account_id = request.POST.get('account_id')
             account = get_object_or_404(Account, pk=account_id, user=user, status='active')
             preferences.default_account = account
             preferences.save()
-            return redirect('accounts_directory')
+            return redirect_accounts_directory()
         elif 'save_balance_snapshot' in request.POST:
             account_id = request.POST.get('account_id')
             snapshot_id = request.POST.get('snapshot_id')
@@ -1423,7 +1564,7 @@ def accounts_directory(request):
                         snapshot.balance = balance_form.cleaned_data['balance']
                         snapshot.note = balance_form.cleaned_data['note']
                         snapshot.save()
-                        return redirect('accounts_directory')
+                        return redirect_accounts_directory()
                 else:
                     AccountBalanceSnapshot.objects.update_or_create(
                         account=account,
@@ -1433,7 +1574,7 @@ def accounts_directory(request):
                             'note': balance_form.cleaned_data['note'],
                         },
                     )
-                    return redirect('accounts_directory')
+                    return redirect_accounts_directory()
             modal_to_open = 'balanceSnapshotModal'
             modal_context = {
                 'snapshot_modal_account_id': account.id,
@@ -1443,17 +1584,17 @@ def accounts_directory(request):
         elif 'copy_balance_snapshot' in request.POST:
             account_id = request.POST.get('account_id')
             account = get_object_or_404(Account, pk=account_id, user=user, status='active')
-            latest_snapshot = account.balance_snapshots.first()
+            latest_snapshot = account.balance_snapshots.filter(snapshot_date__lt=balance_target_date).first()
             if latest_snapshot:
                 AccountBalanceSnapshot.objects.update_or_create(
                     account=account,
-                    snapshot_date=timezone.localdate(),
+                    snapshot_date=balance_target_date,
                     defaults={
                         'balance': latest_snapshot.balance,
                         'note': 'Без изменений',
                     },
                 )
-            return redirect('accounts_directory')
+            return redirect_accounts_directory()
         elif 'delete_balance_snapshot' in request.POST:
             snapshot_id = request.POST.get('snapshot_id')
             snapshot = get_object_or_404(
@@ -1463,14 +1604,19 @@ def accounts_directory(request):
                 account__status__in=['active', 'archived'],
             )
             snapshot.delete()
-            return redirect('accounts_directory')
+            return redirect_accounts_directory()
 
     accounts = accounts.prefetch_related('balance_snapshots')
     active_accounts = Account.objects.filter(user=user, status='active').prefetch_related('balance_snapshots').order_by('name')
     last_transaction_map = {
         row['account_id']: row['last_transaction_at']
         for row in Transaction.objects
-        .filter(account__user=user, account__status='active', is_split_parent=False)
+        .filter(
+            account__user=user,
+            account__status='active',
+            is_split_parent=False,
+            date__date__lte=balance_target_date,
+        )
         .values('account_id')
         .annotate(last_transaction_at=Max('date'))
     }
@@ -1483,68 +1629,72 @@ def accounts_directory(request):
     for account in active_accounts:
         snapshots = list(account.balance_snapshots.all())
         latest_snapshot = snapshots[0] if snapshots else None
-        previous_snapshot = snapshots[1] if len(snapshots) > 1 else None
+        first_snapshot = snapshots[-1] if snapshots else None
+        target_snapshot = next((snapshot for snapshot in snapshots if snapshot.snapshot_date == balance_target_date), None)
+        previous_snapshot = next((snapshot for snapshot in snapshots if snapshot.snapshot_date < balance_target_date), None)
 
-        if latest_snapshot:
-            current_delta = (
-                Transaction.objects
-                .filter(account=account, is_split_parent=False, date__date__gt=latest_snapshot.snapshot_date)
-                .aggregate(total=Sum('amount'))
-                .get('total') or Decimal('0')
-            )
-            expected_now = latest_snapshot.balance + current_delta
-        else:
-            expected_now = None
-
-        if latest_snapshot and previous_snapshot:
+        if previous_snapshot:
             interval_delta = (
                 Transaction.objects
                 .filter(
                     account=account,
                     is_split_parent=False,
                     date__date__gt=previous_snapshot.snapshot_date,
-                    date__date__lte=latest_snapshot.snapshot_date,
+                    date__date__lte=balance_target_date,
                 )
                 .aggregate(total=Sum('amount'))
                 .get('total') or Decimal('0')
             )
-            expected_at_latest = previous_snapshot.balance + interval_delta
-            discrepancy = latest_snapshot.balance - expected_at_latest
+            expected_on_target = previous_snapshot.balance + interval_delta
+        else:
+            expected_on_target = None
+
+        if target_snapshot and previous_snapshot and expected_on_target is not None:
+            discrepancy = target_snapshot.balance - expected_on_target
         else:
             discrepancy = None
 
-        if latest_snapshot:
-            has_today_snapshot = latest_snapshot.snapshot_date == timezone.localdate()
-        else:
-            has_today_snapshot = False
-
-        if latest_snapshot and expected_now is not None:
-            expected_delta = expected_now - latest_snapshot.balance
-        else:
-            expected_delta = None
-
-        check_amount = discrepancy if has_today_snapshot else expected_delta
+        has_target_snapshot = target_snapshot is not None
+        check_amount = discrepancy
         has_check_difference = (
             check_amount is not None
             and check_amount.quantize(Decimal('0.01')) != Decimal('0.00')
         )
+        can_copy_snapshot = previous_snapshot is not None and not has_target_snapshot
 
         balance_summary.append({
             'account': account,
             'latest_snapshot': latest_snapshot,
+            'first_snapshot': first_snapshot,
+            'target_snapshot': target_snapshot,
+            'previous_snapshot': previous_snapshot,
             'last_transaction_at': last_transaction_map.get(account.id),
-            'expected_now': expected_now,
-            'expected_delta': expected_delta,
+            'expected_on_target': expected_on_target,
             'discrepancy': discrepancy,
             'check_amount': check_amount,
             'has_check_difference': has_check_difference,
-            'has_today_snapshot': has_today_snapshot,
+            'has_target_snapshot': has_target_snapshot,
+            'can_copy_snapshot': can_copy_snapshot,
         })
+
+    balance_summary.sort(
+        key=lambda row: (
+            row['has_target_snapshot'],
+            row['account'].name.lower(),
+        )
+    )
+    balance_snapshot_done_count = sum(1 for row in balance_summary if row['has_target_snapshot'])
+    balance_snapshot_total_count = len(balance_summary)
+    balance_snapshot_pending_count = balance_snapshot_total_count - balance_snapshot_done_count
 
     context = {
         'accounts_with_forms': accounts_with_forms,
         'balance_form': balance_form,
         'balance_summary': balance_summary,
+        'balance_target_date': balance_target_date,
+        'balance_snapshot_done_count': balance_snapshot_done_count,
+        'balance_snapshot_total_count': balance_snapshot_total_count,
+        'balance_snapshot_pending_count': balance_snapshot_pending_count,
         'balance_history': AccountBalanceSnapshot.objects.filter(
             account__user=user,
             account__status__in=['active', 'archived'],
@@ -1641,6 +1791,49 @@ def currency_rates_view(request):
                 summary = (
                     f"Первичная загрузка ({target_label}) завершена: inserted={sync_result['inserted']}, "
                     f"updated={sync_result['updated']}, synced={', '.join(sync_result['synced']) or '—'}."
+                )
+                if sync_result["skipped"]:
+                    summary += f" Пропущено: {', '.join(sync_result['skipped'])}."
+                if sync_result.get("failed"):
+                    summary += f" Ошибки: {'; '.join(sync_result['failed'])}."
+                    messages.warning(request, summary)
+                else:
+                    messages.success(request, summary)
+                return redirect("currency_rates")
+            if action == "sync_crypto_historical":
+                start_date_value = (request.POST.get("crypto_start_date") or "2020-01-01").strip()
+                start_date = datetime.strptime(start_date_value, "%Y-%m-%d").date()
+                if start_date > today:
+                    raise ValueError("Дата начала не может быть позже сегодняшней.")
+                crypto_codes = portfolio_crypto_symbols(
+                    [currency.code for currency in active_currencies]
+                )
+                sync_result = sync_crypto_rates_historical(crypto_codes, start_date, today)
+                summary = (
+                    f"История крипты ({sync_result.get('source')}): "
+                    f"inserted={sync_result['inserted']}, updated={sync_result['updated']}, "
+                    f"дней={sync_result['days_written']}."
+                )
+                if sync_result["synced"]:
+                    summary += f" Монеты: {', '.join(sync_result['synced'])}."
+                if sync_result["skipped"]:
+                    summary += f" Пропущено: {', '.join(sync_result['skipped'])}."
+                if sync_result["days_skipped_no_usd"]:
+                    summary += f" Без USD ЦБ: {sync_result['days_skipped_no_usd']} дн."
+                if sync_result.get("failed"):
+                    summary += f" Ошибки: {'; '.join(sync_result['failed'])}."
+                    messages.warning(request, summary)
+                else:
+                    messages.success(request, summary)
+                return redirect("currency_rates")
+            if action == "sync_crypto":
+                crypto_codes = portfolio_crypto_symbols(
+                    [currency.code for currency in active_currencies]
+                )
+                sync_result = sync_crypto_rates_incremental(crypto_codes, end_date=today)
+                summary = (
+                    f"Курсы ({sync_result.get('source') or '—'}): "
+                    f"inserted={sync_result['inserted']}, updated={sync_result['updated']}."
                 )
                 if sync_result["skipped"]:
                     summary += f" Пропущено: {', '.join(sync_result['skipped'])}."

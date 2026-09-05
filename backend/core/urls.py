@@ -18,6 +18,8 @@ from core.views import (
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
+    path('capital/', include(('capital.urls', 'capital'), namespace='capital')),
+    path('crypto/', include(('crypto.urls', 'crypto'), namespace='crypto')),
     path('crm/', include(('crm.urls', 'crm'), namespace='crm')),
     path('transactions/', include(('transactions.urls', 'transactions'), namespace='transactions')),
     path('forecast/', include(('forecasting.urls', 'forecasting'), namespace='forecasting')),

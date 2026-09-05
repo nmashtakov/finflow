@@ -37,8 +37,17 @@ DEFAULT_BUDGET_DISTRIBUTION_WINDOW = 3
 REGULAR_MIN_HISTORY_MONTHS = 12
 REGULAR_MIN_ACTIVE_SHARE = Decimal('0.60')
 REGULAR_MAX_CV = Decimal('1.50')
+DEFAULT_GOAL_MONTHS_LEFT = 6
+DEFAULT_INTERPRETATION_DELTA_THRESHOLD = Decimal('15')
+DEFAULT_INTERPRETATION_AVG_THRESHOLD = Decimal('15')
+DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD = Decimal('35')
+DEFAULT_ANOMALY_THRESHOLD = Decimal('2.0')
+MAX_ANOMALY_THRESHOLD = Decimal('4.0')
 ANOMALY_HISTORY_WINDOW = 12
 ANOMALY_MIN_HISTORY_MONTHS = 6
+MIN_ANOMALY_HISTORY_WINDOW = 3
+MAX_ANOMALY_HISTORY_WINDOW = 24
+MIN_ANOMALY_MIN_HISTORY_MONTHS = 3
 
 
 def get_available_months(user, project_id=None):
@@ -72,11 +81,80 @@ def normalize_budget_window(value):
     return window if window in BUDGET_WINDOW_CHOICES else DEFAULT_BUDGET_DISTRIBUTION_WINDOW
 
 
+def normalize_regular_history_months(value):
+    try:
+        months = int(value)
+    except (TypeError, ValueError):
+        return REGULAR_MIN_HISTORY_MONTHS
+    return min(max(months, 1), 60)
+
+
+def normalize_regular_active_share(value):
+    parsed = _to_decimal(value)
+    if parsed is None:
+        return REGULAR_MIN_ACTIVE_SHARE
+    return min(max(parsed / Decimal('100'), Decimal('0')), Decimal('1'))
+
+
+def normalize_regular_cv(value):
+    parsed = _to_decimal(value)
+    if parsed is None:
+        return REGULAR_MAX_CV
+    return min(max(parsed, Decimal('0')), Decimal('10'))
+
+
+def normalize_goal_months_left(value):
+    try:
+        months = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_GOAL_MONTHS_LEFT
+    return min(max(months, 1), 120)
+
+
+def normalize_percent_threshold(value, default):
+    parsed = _to_decimal(value)
+    if parsed is None:
+        return default
+    return min(max(parsed, Decimal('0')), Decimal('100'))
+
+
+def normalize_anomaly_threshold(value):
+    parsed = _to_decimal(value)
+    if parsed is None:
+        return DEFAULT_ANOMALY_THRESHOLD
+    return min(max(parsed, Decimal('0')), MAX_ANOMALY_THRESHOLD)
+
+
+def normalize_anomaly_history_window(value):
+    try:
+        window = int(value)
+    except (TypeError, ValueError):
+        return ANOMALY_HISTORY_WINDOW
+    return min(max(window, MIN_ANOMALY_HISTORY_WINDOW), MAX_ANOMALY_HISTORY_WINDOW)
+
+
+def normalize_anomaly_min_history_months(value, history_window=None):
+    normalized_window = normalize_anomaly_history_window(history_window)
+    try:
+        min_history = int(value)
+    except (TypeError, ValueError):
+        return min(ANOMALY_MIN_HISTORY_MONTHS, normalized_window)
+    return min(max(min_history, MIN_ANOMALY_MIN_HISTORY_MONTHS), normalized_window)
+
+
 def build_month_report(
     user,
     selected_month=None,
     report_currency='RUB',
-    anomaly_threshold=Decimal('2.0'),
+    anomaly_threshold=DEFAULT_ANOMALY_THRESHOLD,
+    anomaly_history_window=ANOMALY_HISTORY_WINDOW,
+    anomaly_min_history_months=ANOMALY_MIN_HISTORY_MONTHS,
+    regular_min_history_months=REGULAR_MIN_HISTORY_MONTHS,
+    regular_min_active_share=REGULAR_MIN_ACTIVE_SHARE,
+    regular_max_cv=REGULAR_MAX_CV,
+    interpretation_delta_threshold=DEFAULT_INTERPRETATION_DELTA_THRESHOLD,
+    interpretation_avg_threshold=DEFAULT_INTERPRETATION_AVG_THRESHOLD,
+    interpretation_risk_share_threshold=DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD,
     project_id=None,
     dimension='category',
     budget_distribution_window=DEFAULT_BUDGET_DISTRIBUTION_WINDOW,
@@ -92,6 +170,14 @@ def build_month_report(
         selected_month=selected_month,
         report_currency=report_currency,
         anomaly_threshold=anomaly_threshold,
+        anomaly_history_window=anomaly_history_window,
+        anomaly_min_history_months=anomaly_min_history_months,
+        regular_min_history_months=regular_min_history_months,
+        regular_min_active_share=regular_min_active_share,
+        regular_max_cv=regular_max_cv,
+        interpretation_delta_threshold=interpretation_delta_threshold,
+        interpretation_avg_threshold=interpretation_avg_threshold,
+        interpretation_risk_share_threshold=interpretation_risk_share_threshold,
         source_label='Данные системы',
         dimension=dimension,
         budget_owner={'user': user, 'project_id': project_id},
@@ -103,7 +189,15 @@ def build_file_month_report(
     rows,
     selected_month=None,
     report_currency='RUB',
-    anomaly_threshold=Decimal('2.0'),
+    anomaly_threshold=DEFAULT_ANOMALY_THRESHOLD,
+    anomaly_history_window=ANOMALY_HISTORY_WINDOW,
+    anomaly_min_history_months=ANOMALY_MIN_HISTORY_MONTHS,
+    regular_min_history_months=REGULAR_MIN_HISTORY_MONTHS,
+    regular_min_active_share=REGULAR_MIN_ACTIVE_SHARE,
+    regular_max_cv=REGULAR_MAX_CV,
+    interpretation_delta_threshold=DEFAULT_INTERPRETATION_DELTA_THRESHOLD,
+    interpretation_avg_threshold=DEFAULT_INTERPRETATION_AVG_THRESHOLD,
+    interpretation_risk_share_threshold=DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD,
     dimension='category',
     budget_distribution_window=DEFAULT_BUDGET_DISTRIBUTION_WINDOW,
 ):
@@ -143,6 +237,14 @@ def build_file_month_report(
         selected_month=_month_start(selected_month),
         report_currency=report_currency,
         anomaly_threshold=anomaly_threshold,
+        anomaly_history_window=anomaly_history_window,
+        anomaly_min_history_months=anomaly_min_history_months,
+        regular_min_history_months=regular_min_history_months,
+        regular_min_active_share=regular_min_active_share,
+        regular_max_cv=regular_max_cv,
+        interpretation_delta_threshold=interpretation_delta_threshold,
+        interpretation_avg_threshold=interpretation_avg_threshold,
+        interpretation_risk_share_threshold=interpretation_risk_share_threshold,
         source_label='Загруженный файл',
         dimension=dimension,
         budget_distribution_window=budget_distribution_window,
@@ -254,6 +356,14 @@ def _build_report_from_rows(
     selected_month,
     report_currency,
     anomaly_threshold,
+    anomaly_history_window,
+    anomaly_min_history_months,
+    regular_min_history_months,
+    regular_min_active_share,
+    regular_max_cv,
+    interpretation_delta_threshold,
+    interpretation_avg_threshold,
+    interpretation_risk_share_threshold,
     source_label,
     dimension,
     budget_owner=None,
@@ -261,6 +371,29 @@ def _build_report_from_rows(
 ):
     dimension = dimension if dimension in {'category', 'subcategory'} else 'category'
     budget_distribution_window = normalize_budget_window(budget_distribution_window)
+    anomaly_threshold = normalize_anomaly_threshold(anomaly_threshold)
+    anomaly_history_window = normalize_anomaly_history_window(anomaly_history_window)
+    anomaly_min_history_months = normalize_anomaly_min_history_months(
+        anomaly_min_history_months,
+        anomaly_history_window,
+    )
+    regular_min_history_months = normalize_regular_history_months(regular_min_history_months)
+    if isinstance(regular_min_active_share, Decimal) and regular_min_active_share <= 1:
+        regular_min_active_share = regular_min_active_share * Decimal('100')
+    regular_min_active_share = normalize_regular_active_share(regular_min_active_share)
+    regular_max_cv = normalize_regular_cv(regular_max_cv)
+    interpretation_delta_threshold = normalize_percent_threshold(
+        interpretation_delta_threshold,
+        DEFAULT_INTERPRETATION_DELTA_THRESHOLD,
+    )
+    interpretation_avg_threshold = normalize_percent_threshold(
+        interpretation_avg_threshold,
+        DEFAULT_INTERPRETATION_AVG_THRESHOLD,
+    )
+    interpretation_risk_share_threshold = normalize_percent_threshold(
+        interpretation_risk_share_threshold,
+        DEFAULT_INTERPRETATION_RISK_SHARE_THRESHOLD,
+    )
     rows = [row for row in rows if row.get('date') and row.get('amount') is not None]
     if not rows:
         return {'has_data': False}
@@ -334,7 +467,15 @@ def _build_report_from_rows(
         for month in months
         for category in month_data[month]['categories']
     })
-    profiles = _build_category_profiles(categories, months, month_data, selected_month)
+    profiles = _build_category_profiles(
+        categories,
+        months,
+        month_data,
+        selected_month,
+        regular_min_history_months,
+        regular_min_active_share,
+        regular_max_cv,
+    )
     regular_categories = {profile['category'] for profile in profiles if profile['expense_type'] == 'regular'}
     regular_series, risk_series = _split_regular_risk_series(months, month_data, regular_categories)
     regular_forecast_by_month = _moving_average_forecast(months, regular_series, FORECAST_WINDOW)
@@ -352,11 +493,34 @@ def _build_report_from_rows(
     avg_delta_pct = _percent(avg_delta, previous_month_avg)
     risk_share = _percent(risk_series[selected_index], selected_expense)
 
-    anomalies = _detect_current_anomalies(categories, months, month_data, selected_month, anomaly_threshold)
-    anomaly_candidates = _serialize_anomaly_candidates(
-        _detect_current_anomalies(categories, months, month_data, selected_month, Decimal('0'))
+    anomalies = _detect_current_anomalies(
+        categories,
+        months,
+        month_data,
+        selected_month,
+        anomaly_threshold,
+        anomaly_history_window,
+        anomaly_min_history_months,
     )
-    anomaly_grid = _build_anomaly_grid(categories, months, month_data, anomaly_threshold)
+    anomaly_candidates = _serialize_anomaly_candidates(
+        _detect_current_anomalies(
+            categories,
+            months,
+            month_data,
+            selected_month,
+            Decimal('0'),
+            anomaly_history_window,
+            anomaly_min_history_months,
+        )
+    )
+    anomaly_grid = _build_anomaly_grid(
+        categories,
+        months,
+        month_data,
+        anomaly_threshold,
+        anomaly_history_window,
+        anomaly_min_history_months,
+    )
     anomaly_transactions = _build_anomaly_transactions(anomaly_grid['raw_months'], categories, month_data)
     metrics = _forecast_metrics(months, expense_series, forecast_by_month)
 
@@ -371,7 +535,15 @@ def _build_report_from_rows(
             for month in months
             for category in category_month_data[month]['categories']
         })
-        budget_profiles = _build_category_profiles(budget_categories, months, category_month_data, selected_month)
+        budget_profiles = _build_category_profiles(
+            budget_categories,
+            months,
+            category_month_data,
+            selected_month,
+            regular_min_history_months,
+            regular_min_active_share,
+            regular_max_cv,
+        )
         budget = _build_budget_section(
             user=budget_owner['user'],
             project_id=budget_owner.get('project_id') or None,
@@ -398,6 +570,9 @@ def _build_report_from_rows(
         risk_share=risk_share,
         anomalies=anomalies,
         metrics=metrics,
+        interpretation_delta_threshold=interpretation_delta_threshold,
+        interpretation_avg_threshold=interpretation_avg_threshold,
+        interpretation_risk_share_threshold=interpretation_risk_share_threshold,
     )
     chart_months_with_forecast = chart_months + [next_month]
 
@@ -465,12 +640,19 @@ def _build_report_from_rows(
         'anomaly_transactions': anomaly_transactions,
         'settings': {
             'forecast_window': FORECAST_WINDOW,
-            'regular_min_history_months': REGULAR_MIN_HISTORY_MONTHS,
-            'regular_min_active_share': _plain_percent(REGULAR_MIN_ACTIVE_SHARE * 100),
-            'regular_max_cv': _format_number(REGULAR_MAX_CV),
+            'regular_min_history_months': regular_min_history_months,
+            'regular_min_active_share': _plain_percent(regular_min_active_share * 100),
+            'regular_min_active_share_pct': _format_number(regular_min_active_share * 100),
+            'regular_max_cv': _format_number(regular_max_cv),
             'anomaly_threshold': _format_number(anomaly_threshold),
-            'anomaly_history_window': ANOMALY_HISTORY_WINDOW,
-            'anomaly_min_history_months': ANOMALY_MIN_HISTORY_MONTHS,
+            'anomaly_history_window': anomaly_history_window,
+            'anomaly_min_history_months': anomaly_min_history_months,
+            'interpretation_delta_threshold': _format_number(interpretation_delta_threshold),
+            'interpretation_delta_threshold_display': _plain_percent(interpretation_delta_threshold),
+            'interpretation_avg_threshold': _format_number(interpretation_avg_threshold),
+            'interpretation_avg_threshold_display': _plain_percent(interpretation_avg_threshold),
+            'interpretation_risk_share_threshold': _format_number(interpretation_risk_share_threshold),
+            'interpretation_risk_share_threshold_display': _plain_percent(interpretation_risk_share_threshold),
             'budget_distribution_window': budget_distribution_window,
             'budget_window_choices': list(BUDGET_WINDOW_CHOICES),
             'history_months': len(months),
@@ -609,7 +791,15 @@ def _moving_average_forecast(months, values, window):
     return result
 
 
-def _build_category_profiles(categories, months, month_data, selected_month):
+def _build_category_profiles(
+    categories,
+    months,
+    month_data,
+    selected_month,
+    regular_min_history_months,
+    regular_min_active_share,
+    regular_max_cv,
+):
     total_expense = sum((month_data[month]['expense'] for month in months), Decimal('0'))
     selected_categories = month_data[selected_month]['categories']
     total_months = len(months)
@@ -625,9 +815,9 @@ def _build_category_profiles(categories, months, month_data, selected_month):
         active_share = Decimal(active_months) / Decimal(total_months or 1)
         total_share = (total / total_expense * 100) if total_expense else Decimal('0')
         expense_type = 'regular' if (
-            total_months >= REGULAR_MIN_HISTORY_MONTHS
-            and active_share >= REGULAR_MIN_ACTIVE_SHARE
-            and cv <= REGULAR_MAX_CV
+            total_months >= regular_min_history_months
+            and active_share >= regular_min_active_share
+            and cv <= regular_max_cv
         ) else 'risk'
 
         result.append({
@@ -660,12 +850,27 @@ def _split_regular_risk_series(months, month_data, regular_categories):
     return regular, risk
 
 
-def _detect_current_anomalies(categories, months, month_data, selected_month, threshold):
+def _detect_current_anomalies(
+    categories,
+    months,
+    month_data,
+    selected_month,
+    threshold,
+    anomaly_history_window,
+    anomaly_min_history_months,
+):
     selected_index = months.index(selected_month)
     result = []
 
     for category in categories:
-        stats = _rolling_category_stats(category, selected_index, months, month_data)
+        stats = _rolling_category_stats(
+            category,
+            selected_index,
+            months,
+            month_data,
+            anomaly_history_window,
+            anomaly_min_history_months,
+        )
         if not stats:
             continue
         mean_value, std_value = stats
@@ -691,7 +896,14 @@ def _detect_current_anomalies(categories, months, month_data, selected_month, th
     return sorted(result, key=lambda item: abs(item['z_score_raw']), reverse=True)
 
 
-def _build_anomaly_grid(categories, months, month_data, threshold):
+def _build_anomaly_grid(
+    categories,
+    months,
+    month_data,
+    threshold,
+    anomaly_history_window,
+    anomaly_min_history_months,
+):
     display_months = months[-12:]
     display_month_indexes = {month: months.index(month) for month in display_months}
     rows = []
@@ -705,7 +917,14 @@ def _build_anomaly_grid(categories, months, month_data, threshold):
         for month in display_months:
             value = month_data[month]['categories'].get(category, Decimal('0'))
             mean_value = Decimal('0')
-            stats = _rolling_category_stats(category, display_month_indexes[month], months, month_data)
+            stats = _rolling_category_stats(
+                category,
+                display_month_indexes[month],
+                months,
+                month_data,
+                anomaly_history_window,
+                anomaly_min_history_months,
+            )
             if stats:
                 mean_value, std_value = stats
                 z_score = Decimal('0') if std_value <= 0 else (value - mean_value) / std_value
@@ -742,10 +961,10 @@ def _build_anomaly_grid(categories, months, month_data, threshold):
     }
 
 
-def _rolling_category_stats(category, month_index, months, month_data):
-    history_start = max(0, month_index - ANOMALY_HISTORY_WINDOW)
+def _rolling_category_stats(category, month_index, months, month_data, anomaly_history_window, anomaly_min_history_months):
+    history_start = max(0, month_index - anomaly_history_window)
     history_months = months[history_start:month_index]
-    if len(history_months) < ANOMALY_MIN_HISTORY_MONTHS:
+    if len(history_months) < anomaly_min_history_months:
         return None
     values = [month_data[month]['categories'].get(category, Decimal('0')) for month in history_months]
     mean_value = _mean_decimal(values)
@@ -865,14 +1084,29 @@ def _top_current_categories(month_data, months, selected_index, selected_month, 
     return sorted(rows, key=lambda item: item['amount_raw'], reverse=True)
 
 
-def _build_insights(selected_expense, previous_delta, previous_delta_pct, avg_delta, avg_delta_pct, next_forecast, regular_next, risk_next, risk_share, anomalies, metrics):
+def _build_insights(
+    selected_expense,
+    previous_delta,
+    previous_delta_pct,
+    avg_delta,
+    avg_delta_pct,
+    next_forecast,
+    regular_next,
+    risk_next,
+    risk_share,
+    anomalies,
+    metrics,
+    interpretation_delta_threshold,
+    interpretation_avg_threshold,
+    interpretation_risk_share_threshold,
+):
     insights = []
-    if previous_delta_pct >= 15:
+    if previous_delta_pct >= interpretation_delta_threshold:
         insights.append({
             'tone': 'bad',
             'text': f'Расходы выросли относительно предыдущего месяца на {_signed_percent(previous_delta_pct)} ({_signed_money(previous_delta)}).',
         })
-    elif previous_delta_pct <= -15:
+    elif previous_delta_pct <= -interpretation_delta_threshold:
         insights.append({
             'tone': 'good',
             'text': f'Расходы снизились относительно предыдущего месяца на {_plain_percent(abs(previous_delta_pct))} ({_signed_money(previous_delta)}).',
@@ -883,18 +1117,18 @@ def _build_insights(selected_expense, previous_delta, previous_delta_pct, avg_de
             'text': f'Расходы близки к прошлому месяцу: изменение {_signed_percent(previous_delta_pct)} ({_signed_money(previous_delta)}).',
         })
 
-    if avg_delta_pct >= 15:
+    if avg_delta_pct >= interpretation_avg_threshold:
         insights.append({
             'tone': 'bad',
             'text': f'Месяц выше среднего уровня последних {FORECAST_WINDOW} месяцев на {_signed_percent(avg_delta_pct)} ({_signed_money(avg_delta)}).',
         })
-    elif avg_delta_pct <= -15:
+    elif avg_delta_pct <= -interpretation_avg_threshold:
         insights.append({
             'tone': 'good',
             'text': f'Месяц ниже среднего уровня последних {FORECAST_WINDOW} месяцев на {_plain_percent(abs(avg_delta_pct))} ({_signed_money(avg_delta)}).',
         })
 
-    if risk_share >= 35:
+    if risk_share >= interpretation_risk_share_threshold:
         insights.append({
             'tone': 'bad',
             'text': f'Рисковые расходы заняли {_plain_percent(risk_share)} выбранного месяца.',
@@ -948,6 +1182,7 @@ def _build_budget_section(
 ):
     distribution_window = normalize_budget_window(distribution_window)
     auto_income_forecast_next = _mean_decimal(income_series[max(0, selected_index + 1 - FORECAST_WINDOW):selected_index + 1])
+    savings_goal_defaults = _build_savings_goal_defaults()
     regular_categories = {
         profile['category']
         for profile in category_profiles
@@ -1005,6 +1240,9 @@ def _build_budget_section(
     planned_total = Decimal('0')
     seen_categories = set()
     display_income_forecast = saved_plan.forecast_income if saved_plan else auto_income_forecast_next
+    goal_target_amount = saved_plan.goal_target_amount if saved_plan else savings_goal_defaults['target_amount']
+    goal_current_amount = saved_plan.goal_current_amount if saved_plan else savings_goal_defaults['current_amount']
+    goal_months_left = saved_plan.goal_months_left if saved_plan else savings_goal_defaults['months_left']
 
     for draft in line_drafts:
         category = draft['category']
@@ -1063,6 +1301,34 @@ def _build_budget_section(
         ),
     )
     planned_balance = display_income_forecast - planned_total
+    goal_gap_amount = max(goal_target_amount - goal_current_amount, Decimal('0'))
+    goal_required_monthly = (
+        goal_gap_amount / Decimal(goal_months_left)
+        if goal_gap_amount > 0 and goal_months_left > 0 else Decimal('0')
+    )
+    recommendation_total, recommendation_bucket_totals = _build_goal_recommendation_totals(
+        display_income_forecast=display_income_forecast,
+        total_forecast_next=total_forecast_next,
+        regular_forecast_next=regular_forecast_next,
+        risk_forecast_next=risk_forecast_next,
+        goal_required_monthly=goal_required_monthly,
+    )
+    recommendation_by_bucket = {
+        MonthlyBudgetLine.ExpenseType.REGULAR: recommendation_bucket_totals['regular'],
+        MonthlyBudgetLine.ExpenseType.RISK: recommendation_bucket_totals['risk'],
+    }
+    planned_balance_after_goal = planned_balance - goal_required_monthly
+    recommendation_lines = []
+    for line in lines:
+        bucket_total = bucket_forecasts[line['expense_type']]
+        recommended_amount = (
+            recommendation_by_bucket[line['expense_type']] * line['suggested_raw'] / bucket_total
+            if bucket_total > 0 else Decimal('0')
+        )
+        line['recommended'] = _money(recommended_amount)
+        line['recommended_raw'] = recommended_amount
+        line['recommended_input'] = _input_decimal(recommended_amount)
+        recommendation_lines.append(line)
     return {
         'allow_save': True,
         'base_month': selected_month,
@@ -1083,8 +1349,15 @@ def _build_budget_section(
             'forecast_regular': _money(regular_forecast_next),
             'forecast_risk': _money(risk_forecast_next),
             'suggested_total': _money(suggested_total),
+            'recommended_total': _money(recommendation_total),
             'planned_total': _money(planned_total),
             'planned_balance': _money(planned_balance),
+            'goal_target_amount': _money(goal_target_amount),
+            'goal_current_amount': _money(goal_current_amount),
+            'goal_gap_amount': _money(goal_gap_amount),
+            'goal_required_monthly': _money(goal_required_monthly),
+            'goal_months_left': str(goal_months_left),
+            'planned_balance_after_goal': _money(planned_balance_after_goal),
         },
         'summary_raw': {
             'forecast_income': display_income_forecast,
@@ -1093,10 +1366,17 @@ def _build_budget_section(
             'forecast_regular': regular_forecast_next,
             'forecast_risk': risk_forecast_next,
             'suggested_total': suggested_total,
+            'recommended_total': recommendation_total,
             'planned_total': planned_total,
             'planned_balance': planned_balance,
+            'goal_target_amount': goal_target_amount,
+            'goal_current_amount': goal_current_amount,
+            'goal_gap_amount': goal_gap_amount,
+            'goal_required_monthly': goal_required_monthly,
+            'goal_months_left': goal_months_left,
+            'planned_balance_after_goal': planned_balance_after_goal,
         },
-        'lines': lines,
+        'lines': recommendation_lines,
     }
 
 
@@ -1108,6 +1388,18 @@ def save_budget_plan(user, project, budget_data, post_data):
     if forecast_income is None:
         return False
     forecast_income = max(forecast_income, Decimal('0'))
+    goal_target_amount = _to_decimal(post_data.get('budget_goal_target_amount'))
+    goal_current_amount = _to_decimal(post_data.get('budget_goal_current_amount'))
+    goal_months_left = normalize_goal_months_left(post_data.get('budget_goal_months_left'))
+    if goal_target_amount is None or goal_current_amount is None:
+        return False
+    goal_target_amount = max(goal_target_amount, Decimal('0'))
+    goal_current_amount = max(goal_current_amount, Decimal('0'))
+    goal_gap_amount = max(goal_target_amount - goal_current_amount, Decimal('0'))
+    goal_required_monthly = (
+        goal_gap_amount / Decimal(goal_months_left)
+        if goal_gap_amount > 0 else Decimal('0')
+    )
 
     categories = post_data.getlist('budget_category')
     expense_types = post_data.getlist('budget_expense_type')
@@ -1167,8 +1459,13 @@ def save_budget_plan(user, project, budget_data, post_data):
         plan.forecast_expense = _round_decimal(budget_data['summary_raw']['forecast_expense'], Decimal('0.01'))
         plan.forecast_regular = _round_decimal(budget_data['summary_raw']['forecast_regular'], Decimal('0.01'))
         plan.forecast_risk = _round_decimal(budget_data['summary_raw']['forecast_risk'], Decimal('0.01'))
+        plan.goal_target_amount = _round_decimal(goal_target_amount, Decimal('0.01'))
+        plan.goal_current_amount = _round_decimal(goal_current_amount, Decimal('0.01'))
+        plan.goal_months_left = goal_months_left
+        plan.goal_required_monthly = _round_decimal(goal_required_monthly, Decimal('0.01'))
         plan.planned_total = _round_decimal(planned_total, Decimal('0.01'))
         plan.planned_balance = _round_decimal(plan.forecast_income - planned_total, Decimal('0.01'))
+        plan.goal_balance_after_saving = _round_decimal(plan.planned_balance - goal_required_monthly, Decimal('0.01'))
         plan.save()
 
         plan.lines.all().delete()
@@ -1240,6 +1537,33 @@ def _serialize_budget_line(
         'current_plan_delta_ratio': _format_js_number(current_plan_delta_ratio),
         'current_plan_delta_tone': current_plan_delta_tone,
         'sort_order': sort_order,
+    }
+
+
+def _build_savings_goal_defaults():
+    return {
+        'target_amount': Decimal('0'),
+        'current_amount': Decimal('0'),
+        'months_left': DEFAULT_GOAL_MONTHS_LEFT,
+    }
+
+
+def _build_goal_recommendation_totals(
+    display_income_forecast,
+    total_forecast_next,
+    regular_forecast_next,
+    risk_forecast_next,
+    goal_required_monthly,
+):
+    available_after_goal = max(display_income_forecast - goal_required_monthly, Decimal('0'))
+    recommendation_total = min(total_forecast_next, available_after_goal)
+    reduction_needed = max(total_forecast_next - recommendation_total, Decimal('0'))
+    recommended_risk = max(risk_forecast_next - reduction_needed, Decimal('0'))
+    remaining_reduction = max(reduction_needed - risk_forecast_next, Decimal('0'))
+    recommended_regular = max(regular_forecast_next - remaining_reduction, Decimal('0'))
+    return recommendation_total, {
+        'regular': recommended_regular,
+        'risk': recommended_risk,
     }
 
 
