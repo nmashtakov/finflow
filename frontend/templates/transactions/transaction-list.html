@@ -93,67 +93,22 @@
 
 <!-- Modal -->
 <div class="modal fade" id="transactionModal" tabindex="-1" aria-labelledby="transactionModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <form method="post" class="modal-content">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <form id="transactionCreateForm" class="modal-content" novalidate>
             {% csrf_token %}
             <div class="modal-header">
-                <h5 class="modal-title" id="transactionModalLabel">Новая транзакция</h5>
+                <h5 class="modal-title" id="transactionModalLabel">Новые транзакции</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
             </div>
             <div class="modal-body">
-                {% if form.errors %}
-                <div class="alert alert-danger">
-                    Проверьте форму — некоторые поля заполнены некорректно.
-                </div>
-                {% endif %}
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label" for="{{ form.date.id_for_label }}">Дата и время</label>
-                        {{ form.date }}
-                        {% if form.date.errors %}
-                        <div class="invalid-feedback d-block">{{ form.date.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label" for="{{ form.amount.id_for_label }}">Сумма</label>
-                        {{ form.amount }}
-                        {% if form.amount.errors %}
-                        <div class="invalid-feedback d-block">{{ form.amount.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label" for="{{ form.currency.id_for_label }}">Валюта</label>
-                        {{ form.currency }}
-                        {% if form.currency.errors %}
-                        <div class="invalid-feedback d-block">{{ form.currency.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label" for="{{ form.account.id_for_label }}">Счёт</label>
-                        {{ form.account }}
-                        {% if form.account.errors %}
-                        <div class="invalid-feedback d-block">{{ form.account.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label" for="{{ form.expense_link.id_for_label }}">Категория</label>
-                        {{ form.expense_link }}
-                        {% if form.expense_link.errors %}
-                        <div class="invalid-feedback d-block">{{ form.expense_link.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="{{ form.comment.id_for_label }}">Комментарий</label>
-                        {{ form.comment }}
-                        {% if form.comment.errors %}
-                        <div class="invalid-feedback d-block">{{ form.comment.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                </div>
+                <p class="text-muted small mb-3">Расход — отрицательная сумма, доход — положительная. Новая строка копирует дату и счёт.</p>
+                <div id="transactionCreateFeedback" class="alert d-none" role="alert"></div>
+                <div id="transactionCreateRows" class="d-flex flex-column gap-3"></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-3" id="transactionAddRowBtn">+ Ещё строку</button>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="submit" class="btn btn-primary" id="transactionCreateSaveBtn">Сохранить</button>
             </div>
         </form>
     </div>
@@ -295,6 +250,7 @@
 {{ accounts_options|json_script:"accounts-options" }}
 {{ currency_choices|json_script:"currency-options" }}
 {{ expense_links_options|json_script:"expense-links-options" }}
+{{ create_defaults|json_script:"create-defaults" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -362,6 +318,23 @@
         grid-template-columns: 140px 1fr 1fr auto;
         gap: 0.5rem;
         align-items: center;
+    }
+    .transaction-create-row {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 0.9rem 1rem;
+        background: #f8fafc;
+    }
+    .transaction-create-row__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.7rem;
+    }
+    .transaction-create-row__title {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: #334155;
     }
     .split-row .form-control,
     .split-row .form-select,
@@ -505,42 +478,18 @@
             setTimeout(() => feedbackEl.classList.add('d-none'), 4000);
         };
 
-        const accountSelect = document.getElementById('{{ form.account.id_for_label }}');
-        const currencySelect = document.getElementById('{{ form.currency.id_for_label }}');
-        const expenseLinkSelect = document.getElementById('{{ form.expense_link.id_for_label }}');
+        let transactionsTable = null;
+        const createDefaults = JSON.parse(document.getElementById('create-defaults')?.textContent || '{}');
+        const createRowsEl = document.getElementById('transactionCreateRows');
+        const createAddRowBtn = document.getElementById('transactionAddRowBtn');
+        const createForm = document.getElementById('transactionCreateForm');
+        const createSaveBtn = document.getElementById('transactionCreateSaveBtn');
+        const createModalEl = document.getElementById('transactionModal');
+        const createFeedbackEl = document.getElementById('transactionCreateFeedback');
         const dateStartInput = document.getElementById('filterDateStart');
         const dateEndInput = document.getElementById('filterDateEnd');
         const exportBtn = document.getElementById('exportTransactionsBtn');
         const exportReportCurrency = document.getElementById('exportReportCurrency');
-
-        if (accountSelect && currencySelect) {
-            const applyAccountCurrency = () => {
-                const account = accountsData.find(a => String(a.id) === String(accountSelect.value));
-                if (account) {
-                    currencySelect.value = account.currency;
-                }
-            };
-            accountSelect.addEventListener('change', applyAccountCurrency);
-            if (accountSelect.value) {
-                applyAccountCurrency();
-            } else if (!currencySelect.value) {
-                const rubOption = Array.from(currencySelect.options || []).find(option => option.value === 'RUB');
-                if (rubOption) {
-                    currencySelect.value = 'RUB';
-                }
-            }
-        }
-
-        if (expenseLinkSelect && window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
-            const $ = window.jQuery;
-            $(expenseLinkSelect).select2({
-                theme: 'bootstrap-5',
-                width: '100%',
-                minimumResultsForSearch: 0,
-                dropdownParent: $('#transactionModal'),
-                placeholder: 'Выберите категорию',
-            });
-        }
 
         const projectMap = new Map(projectData.map(project => [String(project.id), project]));
         const accountsMap = new Map(accountOptions.map(account => [String(account.id), account]));
@@ -731,6 +680,294 @@
             });
             return html;
         };
+
+        const destroySelect2 = (selectEl) => {
+            if (!selectEl || !window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+            const $ = window.jQuery;
+            if ($(selectEl).hasClass('select2-hidden-accessible')) {
+                $(selectEl).select2('destroy');
+            }
+        };
+
+        const initCreateSelect = (selectEl) => {
+            if (!selectEl || !window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+            const $ = window.jQuery;
+            destroySelect2(selectEl);
+            $(selectEl).select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                minimumResultsForSearch: 0,
+                dropdownParent: createModalEl ? $(createModalEl) : undefined,
+                placeholder: 'Выберите категорию',
+            });
+        };
+
+        const showCreateFeedback = (message, variant = 'danger') => {
+            if (!createFeedbackEl) return;
+            if (!message) {
+                createFeedbackEl.classList.add('d-none');
+                createFeedbackEl.textContent = '';
+                return;
+            }
+            createFeedbackEl.textContent = message;
+            createFeedbackEl.className = `alert alert-${variant}`;
+            createFeedbackEl.classList.remove('d-none');
+        };
+
+        const fieldErrorMap = {
+            account: 'account_id',
+            expense_link: 'expense_link_id',
+        };
+
+        const clearCreateRowErrors = (row) => {
+            row.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+            row.querySelectorAll('.invalid-feedback').forEach((el) => el.remove());
+            const general = row.querySelector('.transaction-create-row-error');
+            if (general) general.remove();
+        };
+
+        const setCreateFieldError = (row, field, messages) => {
+            const mapped = fieldErrorMap[field] || field;
+            const input = row.querySelector(`[data-field="${mapped}"]`);
+            const text = (messages || []).join(' ');
+            if (!text) return;
+            if (!input) {
+                const general = document.createElement('div');
+                general.className = 'transaction-create-row-error text-danger small mt-2';
+                general.textContent = text;
+                row.appendChild(general);
+                return;
+            }
+            input.classList.add('is-invalid');
+            const wrap = input.closest('.col') || input.parentElement;
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback d-block';
+            feedback.textContent = text;
+            wrap.appendChild(feedback);
+        };
+
+        const updateCreateRowState = () => {
+            if (!createRowsEl) return;
+            const rows = Array.from(createRowsEl.querySelectorAll('.transaction-create-row'));
+            rows.forEach((row, index) => {
+                const title = row.querySelector('.transaction-create-row__title');
+                if (title) title.textContent = `Транзакция ${index + 1}`;
+                const removeBtn = row.querySelector('.transaction-create-remove');
+                if (removeBtn) {
+                    removeBtn.classList.toggle('d-none', rows.length === 1);
+                }
+            });
+            if (createSaveBtn) {
+                createSaveBtn.textContent = rows.length > 1 ? `Сохранить ${rows.length}` : 'Сохранить';
+            }
+        };
+
+        const collectCreateItems = () => {
+            if (!createRowsEl) return [];
+            return Array.from(createRowsEl.querySelectorAll('.transaction-create-row')).map((row) => ({
+                date: row.querySelector('[data-field="date"]').value,
+                amount: row.querySelector('[data-field="amount"]').value,
+                currency: row.querySelector('[data-field="currency"]').value,
+                account_id: row.querySelector('[data-field="account_id"]').value,
+                expense_link_id: row.querySelector('[data-field="expense_link_id"]').value,
+                comment: row.querySelector('[data-field="comment"]').value,
+            }));
+        };
+
+        const isBlankCreateItem = (item) => (
+            !String(item.amount || '').trim()
+            && !String(item.expense_link_id || '').trim()
+            && !String(item.comment || '').trim()
+        );
+
+        const addCreateRow = (initial) => {
+            if (!createRowsEl) return;
+            const values = Object.assign({
+                date: createDefaults.date || '',
+                amount: '',
+                currency: createDefaults.currency || (accountOptions[0] && accountOptions[0].currency) || 'RUB',
+                account_id: createDefaults.account_id || (accountOptions[0] && accountOptions[0].id) || '',
+                expense_link_id: '',
+                comment: '',
+            }, initial || {});
+
+            let accountHtml = '<select class="form-select" data-field="account_id">';
+            accountOptions.forEach((option) => {
+                const selected = String(option.id) === String(values.account_id) ? 'selected' : '';
+                accountHtml += `<option value="${option.id}" ${selected}>${option.name}</option>`;
+            });
+            accountHtml += '</select>';
+
+            let currencyHtml = '<select class="form-select" data-field="currency">';
+            currencyOptions.forEach((option) => {
+                const selected = option.code === values.currency ? 'selected' : '';
+                currencyHtml += `<option value="${option.code}" ${selected}>${option.label}</option>`;
+            });
+            if (values.currency && !currencyOptions.some((option) => option.code === values.currency)) {
+                currencyHtml += `<option value="${escapeAttr(values.currency)}" selected>${escapeAttr(values.currency)}</option>`;
+            }
+            currencyHtml += '</select>';
+
+            const row = document.createElement('div');
+            row.className = 'transaction-create-row';
+            row.innerHTML = `
+                <div class="transaction-create-row__header">
+                    <div class="transaction-create-row__title">Транзакция</div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary transaction-create-remove">Удалить</button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Дата и время</label>
+                        <input type="datetime-local" class="form-control" data-field="date" value="${escapeAttr(values.date)}">
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label">Сумма</label>
+                        <input type="number" step="0.01" class="form-control" data-field="amount" placeholder="-150.00" value="${escapeAttr(values.amount)}">
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label">Валюта</label>
+                        ${currencyHtml}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Счёт</label>
+                        ${accountHtml}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Категория</label>
+                        <select class="form-select" data-field="expense_link_id">${buildExpenseLinkOptions(values.expense_link_id)}</select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Комментарий</label>
+                        <input type="text" class="form-control" data-field="comment" placeholder="Необязательно" value="${escapeAttr(values.comment)}">
+                    </div>
+                </div>
+            `;
+
+            const accountSelectEl = row.querySelector('[data-field="account_id"]');
+            const currencySelectEl = row.querySelector('[data-field="currency"]');
+            const expenseSelectEl = row.querySelector('[data-field="expense_link_id"]');
+            const removeBtn = row.querySelector('.transaction-create-remove');
+
+            if (accountSelectEl && currencySelectEl) {
+                accountSelectEl.addEventListener('change', () => {
+                    const selectedAccount = accountsMap.get(String(accountSelectEl.value))
+                        || accountsData.find((account) => String(account.id) === String(accountSelectEl.value));
+                    if (selectedAccount && selectedAccount.currency) {
+                        const exists = Array.from(currencySelectEl.options).some((opt) => opt.value === selectedAccount.currency);
+                        if (!exists) {
+                            const opt = document.createElement('option');
+                            opt.value = selectedAccount.currency;
+                            opt.textContent = selectedAccount.currency;
+                            currencySelectEl.appendChild(opt);
+                        }
+                        currencySelectEl.value = selectedAccount.currency;
+                    }
+                });
+            }
+
+            initCreateSelect(expenseSelectEl);
+            removeBtn.addEventListener('click', () => {
+                destroySelect2(expenseSelectEl);
+                row.remove();
+                updateCreateRowState();
+            });
+            createRowsEl.appendChild(row);
+            updateCreateRowState();
+            const amountInput = row.querySelector('[data-field="amount"]');
+            if (amountInput) amountInput.focus();
+        };
+
+        const resetCreateRows = () => {
+            if (!createRowsEl) return;
+            createRowsEl.querySelectorAll('[data-field="expense_link_id"]').forEach(destroySelect2);
+            createRowsEl.innerHTML = '';
+            showCreateFeedback('');
+        };
+
+        const pluralizeTransactions = (count) => {
+            const n10 = count % 10;
+            const n100 = count % 100;
+            if (n10 === 1 && n100 !== 11) return `${count} транзакцию`;
+            if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return `${count} транзакции`;
+            return `${count} транзакций`;
+        };
+
+        if (createAddRowBtn) {
+            createAddRowBtn.addEventListener('click', () => {
+                const last = createRowsEl ? createRowsEl.querySelector('.transaction-create-row:last-child') : null;
+                const initial = last ? {
+                    date: last.querySelector('[data-field="date"]').value,
+                    currency: last.querySelector('[data-field="currency"]').value,
+                    account_id: last.querySelector('[data-field="account_id"]').value,
+                } : {};
+                addCreateRow(initial);
+            });
+        }
+
+        if (createModalEl) {
+            createModalEl.addEventListener('shown.bs.modal', () => {
+                if (createRowsEl && !createRowsEl.querySelector('.transaction-create-row')) {
+                    addCreateRow();
+                }
+                const firstAmount = createRowsEl ? createRowsEl.querySelector('[data-field="amount"]') : null;
+                if (firstAmount) firstAmount.focus();
+            });
+            createModalEl.addEventListener('hidden.bs.modal', () => {
+                resetCreateRows();
+            });
+        }
+
+        if (createForm) {
+            createForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                if (!createRowsEl) return;
+                showCreateFeedback('');
+                createRowsEl.querySelectorAll('.transaction-create-row').forEach(clearCreateRowErrors);
+
+                let items = collectCreateItems();
+                while (items.length > 1 && isBlankCreateItem(items[items.length - 1])) {
+                    items.pop();
+                }
+                if (!items.length || (items.length === 1 && isBlankCreateItem(items[0]))) {
+                    showCreateFeedback('Заполните хотя бы одну транзакцию.');
+                    return;
+                }
+
+                if (createSaveBtn) createSaveBtn.disabled = true;
+                fetch('{% url "transactions:create" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ items }),
+                })
+                    .then((response) => response.json().then((body) => ({ ok: response.ok, body })))
+                    .then(({ ok, body }) => {
+                        if (!ok || !body.success) {
+                            const rows = Array.from(createRowsEl.querySelectorAll('.transaction-create-row'));
+                            (body.item_errors || []).forEach((errors, index) => {
+                                const row = rows[index];
+                                if (!row || !errors) return;
+                                Object.entries(errors).forEach(([field, messages]) => {
+                                    setCreateFieldError(row, field, messages);
+                                });
+                            });
+                            showCreateFeedback(body.error || 'Не удалось сохранить транзакции.');
+                            return;
+                        }
+                        const count = body.created_count || items.length;
+                        const modal = bootstrap.Modal.getInstance(createModalEl);
+                        if (modal) modal.hide();
+                        if (transactionsTable) transactionsTable.ajax.reload(null, false);
+                        showFeedback(`Добавлено ${pluralizeTransactions(count)}`, 'success');
+                    })
+                    .catch(() => showCreateFeedback('Не удалось сохранить транзакции.'))
+                    .finally(() => {
+                        if (createSaveBtn) createSaveBtn.disabled = false;
+                    });
+            });
+        }
 
         const recalcSplitSummary = () => {
             if (!splitRowsEl || !activeSplitTransaction) return;
@@ -1076,6 +1313,7 @@
                     }
                 }
             });
+            transactionsTable = table;
 
             let searchDebounce;
             const reload = () => table.ajax.reload();
@@ -1170,14 +1408,6 @@
         if (typeof feather !== 'undefined') {
             feather.replace();
         }
-
-        {% if error_modal %}
-        var modalEl = document.getElementById('transactionModal');
-        if (modalEl) {
-            var modal = new bootstrap.Modal(modalEl);
-            modal.show();
-        }
-        {% endif %}
     });
 </script>
 {% endblock %}

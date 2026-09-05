@@ -1,12 +1,14 @@
+import json
 from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Category, ExpenseLink, Project, Transaction
+from core.models import Account, Category, Currency, ExpenseLink, Project, Transaction
 from .models import CategorizationRule, ImportedTransaction, ImportSource, TransactionImportSession
 from .normalizers.registry import get_normalizer, normalize_source_code
 from .rules.engine import apply_pipeline, compute_specificity
@@ -496,3 +498,111 @@ class ReviewAndFinalizeFlowTest(TestCase):
 
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(CategorizationRule.objects.count(), 0)
+
+
+class TransactionCreateViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="manual-create", password="password123")
+        self.other = User.objects.create_user(username="other-create", password="password123")
+        Currency.objects.create(code="RUB", name="Российский рубль", status="active")
+        self.account = Account.objects.create(user=self.user, name="Карта", currency="RUB", status="active")
+        self.other_account = Account.objects.create(user=self.other, name="Чужой", currency="RUB", status="active")
+        self.project = Project.objects.create(user=self.user, name="Личное", status="active")
+        self.category = Category.objects.create(user=self.user, name="Еда", status="active")
+        self.expense_link = ExpenseLink.objects.create(
+            user=self.user,
+            project=self.project,
+            category=self.category,
+            status="active",
+        )
+        self.url = reverse("transactions:create")
+        self.client.login(username="manual-create", password="password123")
+
+    def _item(self, **overrides):
+        payload = {
+            "date": timezone.localtime(timezone.now()).strftime("%Y-%m-%dT%H:%M"),
+            "amount": "-120.50",
+            "currency": "RUB",
+            "account_id": self.account.id,
+            "expense_link_id": self.expense_link.id,
+            "comment": "кофе",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_creates_multiple_transactions(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({
+                "items": [
+                    self._item(amount="-100", comment="обед"),
+                    self._item(amount="2500", comment="зарплата"),
+                ]
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        body = response.json()
+        self.assertTrue(body["success"])
+        self.assertEqual(body["created_count"], 2)
+        self.assertEqual(Transaction.objects.filter(account=self.account).count(), 2)
+        amounts = set(Transaction.objects.filter(account=self.account).values_list("amount", flat=True))
+        self.assertEqual(amounts, {Decimal("-100.00"), Decimal("2500.00")})
+        types = set(Transaction.objects.filter(account=self.account).values_list("transaction_type", flat=True))
+        self.assertEqual(types, {"expense", "income"})
+
+    def test_invalid_row_creates_nothing(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({
+                "items": [
+                    self._item(comment="ok"),
+                    self._item(amount="not-a-number", comment="bad"),
+                ]
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertFalse(body["success"])
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertTrue(body["item_errors"][1].get("amount"))
+
+    def test_trailing_blank_row_is_ignored(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({
+                "items": [
+                    self._item(comment="только эта"),
+                    {
+                        "date": timezone.localtime(timezone.now()).strftime("%Y-%m-%dT%H:%M"),
+                        "amount": "",
+                        "currency": "RUB",
+                        "account_id": self.account.id,
+                        "expense_link_id": "",
+                        "comment": "",
+                    },
+                ]
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["created_count"], 1)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_rejects_foreign_account(self):
+        response = self.client.post(
+            self.url,
+            data=json.dumps({"items": [self._item(account_id=self.other_account.id)]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Transaction.objects.count(), 0)
+
+    def test_list_page_has_multi_row_controls(self):
+        response = self.client.get(reverse("transactions:list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "transactionAddRowBtn")
+        self.assertContains(response, "Ещё строку")
+        self.assertContains(response, reverse("transactions:create"))
+

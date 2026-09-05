@@ -173,9 +173,11 @@ class TransactionForm(forms.ModelForm):
     date = forms.DateTimeField(
         label='Дата и время',
         widget=forms.DateTimeInput(
-            attrs={'type': 'datetime-local'}
+            attrs={'type': 'datetime-local'},
+            format='%Y-%m-%dT%H:%M',
         ),
-        initial=lambda: timezone.now().strftime('%Y-%m-%dT%H:%M'),
+        input_formats=['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S'],
+        initial=lambda: timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M'),
     )
     amount = forms.DecimalField(label='Сумма', max_digits=14, decimal_places=2)
     currency = forms.ChoiceField(label='Валюта')

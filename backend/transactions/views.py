@@ -2057,6 +2057,38 @@ def transaction_import_review(request):
     )
 
 
+MANUAL_CREATE_MAX_ITEMS = 50
+
+
+def _is_blank_manual_item(item):
+    if not isinstance(item, dict):
+        return True
+    amount = str(item.get('amount') if item.get('amount') is not None else '').strip()
+    expense_link = str(item.get('expense_link_id') or item.get('expense_link') or '').strip()
+    comment = str(item.get('comment') or '').strip()
+    return not amount and not expense_link and not comment
+
+
+def _manual_item_form_data(item):
+    return {
+        'date': item.get('date') or '',
+        'amount': '' if item.get('amount') is None else item.get('amount'),
+        'currency': item.get('currency') or '',
+        'account': item.get('account_id') or item.get('account') or '',
+        'expense_link': item.get('expense_link_id') or item.get('expense_link') or '',
+        'comment': item.get('comment') or '',
+    }
+
+
+def _save_transaction_form(form):
+    transaction = form.save(commit=False)
+    transaction.account = form.cleaned_data['account']
+    transaction.currency = form.cleaned_data['currency']
+    transaction.comment = form.cleaned_data.get('comment', '')
+    transaction.save()
+    return transaction
+
+
 @login_required
 def transaction_list(request):
     user = request.user
@@ -2075,54 +2107,6 @@ def transaction_list(request):
     if preferences.default_account:
         initial_form_data['account'] = preferences.default_account.pk
         initial_form_data['currency'] = preferences.default_account.currency
-
-    if request.method == 'POST':
-        form = TransactionForm(user, request.POST)
-        if form.is_valid():
-            transaction = form.save(commit=False)
-            transaction.account = form.cleaned_data['account']
-            transaction.currency = form.cleaned_data['currency']
-            transaction.comment = form.cleaned_data.get('comment', '')
-            transaction.save()
-            return redirect('transactions:list')
-        else:
-            project_tree = _build_project_structure(user)
-            accounts = Account.objects.filter(user=user, status='active').order_by('name')
-            projects = Project.objects.filter(user=user, status='active').order_by('name')
-            categories = Category.objects.filter(user=user, status='active').order_by('name')
-            subcategories = Subcategory.objects.filter(user=user, status='active').order_by('name')
-            context = {
-                'form': form,
-                'accounts': accounts,
-                'project_tree': project_tree,
-                'projects': projects,
-                'categories': categories,
-                'subcategories': subcategories,
-                'accounts_data': [
-                    {'id': account.id, 'currency': account.currency}
-                    for account in accounts
-                ],
-                'default_account_id': preferences.default_account_id,
-                'default_project_id': preferences.default_project_id,
-                'error_modal': True,
-                'expense_links_options': list(
-                    ExpenseLink.objects.filter(
-                        user=user,
-                        status='active',
-                        project__status='active',
-                        category__status='active',
-                    )
-                    .select_related('project', 'category', 'subcategory')
-                    .order_by('project__name', 'category__name', 'subcategory__name')
-                    .values(
-                        'id',
-                        'project__name',
-                        'category__name',
-                        'subcategory__name',
-                    )
-                ),
-            }
-            return render(request, 'transactions/transaction-list.html', context)
 
     form = TransactionForm(user, initial=initial_form_data)
     project_tree = _build_project_structure(user)
@@ -2153,6 +2137,15 @@ def transaction_list(request):
         ],
         'default_account_id': preferences.default_account_id,
         'default_project_id': preferences.default_project_id,
+        'create_defaults': {
+            'account_id': preferences.default_account_id,
+            'currency': (
+                preferences.default_account.currency
+                if preferences.default_account
+                else 'RUB'
+            ),
+            'date': timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M'),
+        },
         'expense_links_options': list(
             ExpenseLink.objects.filter(
                 user=user,
@@ -2171,6 +2164,62 @@ def transaction_list(request):
         ),
     }
     return render(request, 'transactions/transaction-list.html', context)
+
+
+@login_required
+@require_POST
+def transaction_create(request):
+    try:
+        payload = json.loads((request.body or b'{}').decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'error': 'Не удалось разобрать данные'}, status=400)
+
+    items = payload.get('items')
+    if not isinstance(items, list) or not items:
+        return JsonResponse({'success': False, 'error': 'Добавьте хотя бы одну транзакцию.'}, status=400)
+
+    while len(items) > 1 and _is_blank_manual_item(items[-1]):
+        items = items[:-1]
+
+    if len(items) > MANUAL_CREATE_MAX_ITEMS:
+        return JsonResponse(
+            {'success': False, 'error': f'За один раз можно добавить не больше {MANUAL_CREATE_MAX_ITEMS} транзакций.'},
+            status=400,
+        )
+
+    forms = []
+    item_errors = []
+    has_errors = False
+    for item in items:
+        if not isinstance(item, dict):
+            item = {}
+        form = TransactionForm(request.user, _manual_item_form_data(item))
+        forms.append(form)
+        if form.is_valid():
+            item_errors.append({})
+        else:
+            has_errors = True
+            item_errors.append({
+                field: [str(error) for error in error_list]
+                for field, error_list in form.errors.items()
+            })
+
+    if has_errors:
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'Проверьте строки — некоторые поля заполнены некорректно.',
+                'item_errors': item_errors,
+            },
+            status=400,
+        )
+
+    created_ids = []
+    with db_transaction.atomic():
+        for form in forms:
+            created_ids.append(_save_transaction_form(form).id)
+
+    return JsonResponse({'success': True, 'created_count': len(created_ids), 'ids': created_ids})
 
 
 TRANSACTION_SORT_COLUMN_MAP = {
