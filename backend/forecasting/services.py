@@ -8,6 +8,7 @@ from django.db import transaction as db_transaction
 from django.db.models import Max, Min
 from django.utils import timezone
 
+from core.currencies import fx_currency_code
 from core.models import CurrencyRate, Transaction, TransactionLinkGroup, TransactionLinkItem
 from .models import MonthlyBudgetLine, MonthlyBudgetPlan
 
@@ -699,7 +700,7 @@ def _build_rate_lookup(tx_list, report_currency):
     max_date = max(dates)
     lookup = {'RUB': [(min_date, Decimal('1'))]}
     for currency in currencies:
-        normalized_currency = 'USD' if currency == 'USDT' else currency
+        normalized_currency = fx_currency_code(currency) or currency
         if normalized_currency == 'RUB' or normalized_currency in lookup:
             continue
         rows = list(
@@ -713,7 +714,7 @@ def _build_rate_lookup(tx_list, report_currency):
 
 
 def _rate_on_date(rate_lookup, currency, target_date):
-    currency = 'USD' if currency == 'USDT' else (currency or 'RUB').upper()
+    currency = fx_currency_code(currency) or 'RUB'
     if currency == 'RUB':
         return Decimal('1')
     rows = rate_lookup.get(currency) or []
@@ -727,7 +728,7 @@ def _rate_on_date(rate_lookup, currency, target_date):
 def _convert_amount(amount, source_currency, target_currency, target_date, rate_lookup):
     source = (source_currency or 'RUB').upper()
     target = (target_currency or 'RUB').upper()
-    if source == target:
+    if source == target or fx_currency_code(source) == fx_currency_code(target):
         return Decimal(amount or 0)
     source_rate = _rate_on_date(rate_lookup, source, target_date)
     target_rate = _rate_on_date(rate_lookup, target, target_date)
@@ -739,7 +740,7 @@ def _convert_amount(amount, source_currency, target_currency, target_date, rate_
 def _convert_file_amount(amount, source_currency, target_currency, target_date):
     source = (source_currency or 'RUB').upper()
     target = (target_currency or 'RUB').upper()
-    if source == target:
+    if source == target or fx_currency_code(source) == fx_currency_code(target):
         return amount
     source_rate = _single_rate_on_date(source, target_date)
     target_rate = _single_rate_on_date(target, target_date)
@@ -749,7 +750,7 @@ def _convert_file_amount(amount, source_currency, target_currency, target_date):
 
 
 def _single_rate_on_date(currency, target_date):
-    currency = 'USD' if currency == 'USDT' else (currency or 'RUB').upper()
+    currency = fx_currency_code(currency) or 'RUB'
     if currency == 'RUB':
         return Decimal('1')
     row = CurrencyRate.objects.filter(currency=currency, date__lte=target_date).order_by('-date').first()

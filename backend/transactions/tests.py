@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -229,6 +229,394 @@ class NormalizationPipelineTest(TestCase):
         self.assertEqual(invest_tx.amount, Decimal("-30.00"))
         self.assertEqual(invest_tx.currency, "RUB")
         self.assertEqual(invest_tx.source_category_norm, "инвесткопилка")
+
+    def test_tinkoff_new_export_rounding_and_custom_category(self):
+        session = TransactionImportSession.objects.create(
+            user=self.user,
+            source=self.source,
+            original_name="Operations.csv",
+            columns=[
+                "Имя счёта",
+                "Дата операции",
+                "Сумма операции",
+                "Валюта операции",
+                "Категория по-умолчанию",
+                "Ваша категория",
+                "Описание",
+                "Сообщение",
+                "Округление",
+            ],
+            sample_rows=[],
+            rows=[
+                {
+                    "Имя счёта": "Black",
+                    "Дата операции": "03.09.2026 21:10:27",
+                    "Сумма операции": "-1445,00",
+                    "Валюта операции": "RUB",
+                    "Категория по-умолчанию": "Рестораны",
+                    "Ваша категория": "Ужины",
+                    "Описание": "Osteria Mario",
+                    "Сообщение": "День рождения",
+                    "Округление": "55,00",
+                }
+            ],
+            metadata={"include_tinkoff_invest_rounding": True},
+        )
+        mapping = {
+            "column_date": "Дата операции",
+            "column_amount": "Сумма операции",
+            "column_currency": "Валюта операции",
+            "column_comment": "Описание",
+            "column_type": "",
+            "column_category": "Категория по-умолчанию",
+            "column_subcategory": "",
+            "default_currency": "RUB",
+            "income_markers": "",
+            "expense_markers": "",
+        }
+
+        result = normalize_rows(self.user, session, mapping)
+
+        self.assertEqual(result["normalized"], 2)
+        spend_tx = ImportedTransaction.objects.get(session=session, amount=Decimal("-1445.00"))
+        self.assertEqual(spend_tx.source_category_norm, "ужины")
+        self.assertEqual(spend_tx.merchant_norm, "osteria mario")
+        self.assertEqual(spend_tx.original_description, "Osteria Mario — День рождения")
+        invest_tx = ImportedTransaction.objects.get(
+            session=session,
+            normalized_payload__generated_kind="tinkoff_invest_rounding",
+        )
+        self.assertEqual(invest_tx.amount, Decimal("-55.00"))
+
+
+class TinkoffExportDetectionTest(SimpleTestCase):
+    NEW_COLUMNS = [
+        "Имя счёта",
+        "Номер карты",
+        "Дата операции",
+        "Сумма операции",
+        "Валюта операции",
+        "Сумма в валюте счёта",
+        "Валюта счёта",
+        "Статус",
+        "Категория по-умолчанию",
+        "Ваша категория",
+        "MCC",
+        "Описание",
+        "Сообщение",
+        "Округление",
+        "Сумма операции с округлением",
+        "Бонусы (включая кэшбэк)",
+        "Учёт в аналитике",
+    ]
+    OLD_COLUMNS = [
+        "Дата операции",
+        "Сумма операции",
+        "Валюта операции",
+        "Категория",
+        "Описание",
+        "Номер карты",
+        "Округление на инвесткопилку",
+    ]
+
+    def test_detects_old_and_new_tinkoff_exports(self):
+        from transactions.views import _build_tinkoff_mapping, _infer_preset, _is_tinkoff_columns
+
+        self.assertTrue(_is_tinkoff_columns(self.NEW_COLUMNS))
+        self.assertEqual(_infer_preset(self.NEW_COLUMNS), "tinkoff")
+        self.assertTrue(_is_tinkoff_columns(self.OLD_COLUMNS))
+        self.assertEqual(_infer_preset(self.OLD_COLUMNS), "tinkoff")
+
+        class Session:
+            columns = self.NEW_COLUMNS
+
+        mapping = _build_tinkoff_mapping(Session(), {"default_currency": "RUB", "default_account": None, "default_account_name": "Black"})
+        self.assertEqual(mapping["column_category"], "Категория по-умолчанию")
+        self.assertFalse(mapping.get("column_account"))
+        self.assertEqual(mapping["column_comment"], "Сообщение")
+        self.assertEqual(mapping["column_date"], "Дата операции")
+
+        class OldSession:
+            columns = self.OLD_COLUMNS
+
+        old_mapping = _build_tinkoff_mapping(OldSession(), {"default_currency": "RUB", "default_account": None, "default_account_name": "Black"})
+        self.assertEqual(old_mapping["column_comment"], "Описание")
+
+    def test_comment_uses_tinkoff_message_when_present(self):
+        from transactions.normalizers.base import NormalizationContext
+        from transactions.normalizers.tinkoff import TinkoffNormalizer
+        from transactions.views import _review_comment_display
+
+        context = NormalizationContext(
+            column_date="Дата операции",
+            column_amount="Сумма операции",
+            column_currency="Валюта операции",
+            column_comment="Сообщение",
+            column_type=None,
+            column_category="Категория по-умолчанию",
+            column_subcategory=None,
+            default_currency="RUB",
+            income_markers=set(),
+            expense_markers=set(),
+        )
+        normalizer = TinkoffNormalizer()
+        with_message = normalizer.normalize_row(
+            {
+                "Дата операции": "03.09.2026 12:00:00",
+                "Сумма операции": "-500",
+                "Валюта операции": "RUB",
+                "Категория по-умолчанию": "Переводы",
+                "Описание": "Никита М.",
+                "Сообщение": "Саня вывод на подарок Лего",
+            },
+            context,
+        )
+        self.assertEqual(with_message.original_description, "Никита М. — Саня вывод на подарок Лего")
+
+        sber = normalizer.normalize_row(
+            {
+                "Дата операции": "31.08.2026 12:49:09",
+                "Сумма операции": "65250,00",
+                "Валюта операции": "RUB",
+                "Категория по-умолчанию": "Пополнения",
+                "Описание": "Пополнение через Сбербанк",
+                "Сообщение": "",
+            },
+            context,
+        )
+        self.assertEqual(sber.original_description, "Пополнение через Сбербанк")
+        self.assertEqual(sber.source_category_norm, "пополнения")
+
+        class Session:
+            metadata = {"last_mapping": {"column_comment": "Сообщение"}}
+
+        class Imported:
+            original_description = "Пополнение через Сбербанк"
+            description_norm = "пополнение через сбербанк"
+            raw_payload = {
+                "Описание": "Пополнение через Сбербанк",
+                "Сообщение": "Перечисление аванса за август 2026г. НДС не облагается.",
+            }
+            session = Session()
+
+        self.assertIn("Перечисление аванса за август 2026г.", _review_comment_display(Imported()))
+
+
+class TBusinessExportDetectionTest(SimpleTestCase):
+    NEW_COLUMNS = [
+        "Номер счёта",
+        "Тип операции",
+        "Дата проведения",
+        "Номер документа",
+        "Валюта операции",
+        "Сумма в валюте счёта",
+        "Валюта счёта",
+        "Описание операции",
+        "Назначение платежа",
+        "Наименование контрагента",
+        "Дебет",
+        "Кредит",
+    ]
+    OLD_COLUMNS = [
+        "Номер счёта",
+        "Тип операции (пополнение/списание)",
+        "Дата проведения",
+        "Номер платежа",
+        "Валюта операции",
+        "Сумма в валюте счёта",
+        "Валюта счёта",
+        "Описание операции",
+        "Назначение платежа",
+    ]
+    SHORT_COLUMNS = [
+        "Номер счёта",
+        "Тип операции",
+        "Дата проведения",
+        "Сумма в валюте счёта",
+        "Назначение платежа",
+        "Наименование контрагента",
+    ]
+
+    def test_detects_old_and_new_t_business_exports(self):
+        from transactions.views import _build_t_business_mapping, _infer_preset, _is_t_business_columns
+
+        for columns in (self.NEW_COLUMNS, self.OLD_COLUMNS, self.SHORT_COLUMNS):
+            self.assertTrue(_is_t_business_columns(columns), columns)
+            self.assertEqual(_infer_preset(columns), "t_business")
+
+        class Session:
+            columns = self.NEW_COLUMNS
+
+        mapping = _build_t_business_mapping(
+            Session(),
+            {"default_currency": "RUB", "default_account": None, "default_account_name": "ИП"},
+        )
+        self.assertEqual(mapping["column_date"], "Дата проведения")
+        self.assertEqual(mapping["column_amount"], "Сумма в валюте счёта")
+        self.assertEqual(mapping["column_comment"], "Назначение платежа")
+        self.assertEqual(mapping["column_category"], "Описание операции")
+        self.assertEqual(mapping["column_type"], "Тип операции")
+        self.assertIn("кредит", mapping["income_markers"])
+        self.assertIn("дебет", mapping["expense_markers"])
+
+    def test_reads_xlsx_with_preamble_and_keeps_payment_purpose(self):
+        import io
+
+        import pandas as pd
+
+        from transactions.normalizers.base import NormalizationContext
+        from transactions.normalizers.t_business import TBusinessNormalizer
+        from transactions.views import _build_t_business_mapping, _infer_preset, _read_import_file
+
+        columns = [
+            "Номер счёта",
+            "Тип операции",
+            "Дата проведения",
+            "Номер документа",
+            "Валюта операции",
+            "Сумма в валюте счёта",
+            "Валюта счёта",
+            "Описание операции",
+            "Назначение платежа",
+            "Наименование контрагента",
+            "Дебет",
+            "Кредит",
+        ]
+        preamble = pd.DataFrame(
+            [["Выписка по счёту №", "40802"] + [None] * (len(columns) - 2)] * 9
+        )
+        header = pd.DataFrame([columns])
+        data = pd.DataFrame(
+            [
+                [
+                    "40802810000007904283",
+                    "Кредит",
+                    "06.07.2026",
+                    "182781",
+                    "643",
+                    "65250",
+                    "643",
+                    "Пополнение счета",
+                    "Перечисление аванса за август 2026г. НДС не облагается.",
+                    "ПАО Сбербанк",
+                    "0",
+                    "65250",
+                ],
+                [
+                    "40802810000007904283",
+                    "Дебет",
+                    "17.08.2026",
+                    "1",
+                    "643",
+                    "490",
+                    "643",
+                    "Плата за обслуживание счета",
+                    "Плата за обслуживание счета. Договор 7086294799",
+                    'АО "ТБанк"',
+                    "490",
+                    "0",
+                ],
+            ]
+        )
+        raw = pd.concat([preamble, header, data], ignore_index=True)
+
+        buffer = io.BytesIO()
+        raw.to_excel(buffer, index=False, header=False, sheet_name="statement_xls")
+        buffer.seek(0)
+
+        parsed = _read_import_file(buffer, original_name="statement.xlsx")
+        self.assertEqual(_infer_preset(parsed["columns"]), "t_business")
+        self.assertEqual(len(parsed["rows"]), 2)
+
+        class Session:
+            columns = parsed["columns"]
+
+        mapping = _build_t_business_mapping(
+            Session(),
+            {"default_currency": "RUB", "default_account": None, "default_account_name": "ИП"},
+        )
+        context = NormalizationContext(
+            column_date=mapping["column_date"],
+            column_amount=mapping["column_amount"],
+            column_currency=mapping["column_currency"] or None,
+            column_comment=mapping["column_comment"] or None,
+            column_type=mapping["column_type"] or None,
+            column_category=mapping["column_category"] or None,
+            column_subcategory=None,
+            default_currency="RUB",
+            income_markers={"кредит", "пополнение", "income", "credit"},
+            expense_markers={"дебет", "списание", "expense", "debit"},
+        )
+        normalizer = TBusinessNormalizer()
+        income = normalizer.normalize_row(parsed["rows"][0], context)
+        expense = normalizer.normalize_row(parsed["rows"][1], context)
+
+        self.assertEqual(income.direction, "income")
+        self.assertEqual(income.amount, Decimal("65250"))
+        self.assertEqual(income.currency, "RUB")
+        self.assertEqual(income.original_description, "Перечисление аванса за август 2026г. НДС не облагается.")
+        self.assertEqual(income.source_category_norm, "пополнение счета")
+        self.assertEqual(str(income.external_id).split(".")[0], "182781")
+
+        self.assertEqual(expense.direction, "expense")
+        self.assertEqual(expense.amount, Decimal("-490"))
+        self.assertEqual(expense.original_description, "Плата за обслуживание счета. Договор 7086294799")
+
+
+class UsdStablecoinHandlingTest(SimpleTestCase):
+    def test_usd_stables_use_usd_rate_and_enter_bybit_import(self):
+        from types import SimpleNamespace
+
+        from core.currencies import fx_currency_code, is_usd_stablecoin, split_stable_quote_pair
+        from django.utils import timezone
+        from transactions.views import _transform_bybit_events_for_import
+
+        for code in ("USDT", "USDC", "USDE"):
+            self.assertTrue(is_usd_stablecoin(code))
+            self.assertEqual(fx_currency_code(code), "USD")
+        self.assertEqual(split_stable_quote_pair("ETHUSDE"), ("ETH", "USDE"))
+        self.assertEqual(fx_currency_code("USDC"), fx_currency_code("USDT"))
+        self.assertEqual(fx_currency_code("USDE"), fx_currency_code("USD"))
+
+        now = timezone.now()
+        events = [
+            SimpleNamespace(
+                id=index,
+                stream="uta_translog",
+                description="Transfer",
+                asset=asset,
+                amount=Decimal("10"),
+                occurred_at=now,
+                raw_payload={},
+                external_id=asset,
+            )
+            for index, asset in enumerate(("USDC", "USDE", "BTC"), start=1)
+        ]
+        rows = _transform_bybit_events_for_import(events)
+        currencies = {row["currency"] for row in rows}
+        self.assertEqual(currencies, {"USDC", "USDE"})
+
+
+class ReviewFilterHelpersTest(SimpleTestCase):
+    def test_multi_filter_reads_get_and_prefixed_post(self):
+        from django.test import RequestFactory
+
+        from transactions.views import _multi_filter_values, _review_filter_query
+
+        request = RequestFactory().post(
+            "/review?source_category=супермаркет",
+            {"filter_exclude_category": "инвесткопилка", "filter_description": "авито"},
+        )
+        self.assertEqual(_multi_filter_values(request, "source_category"), ["супермаркет"])
+        self.assertEqual(_multi_filter_values(request, "exclude_category"), ["инвесткопилка"])
+        query = _review_filter_query(12, "авито", ["супермаркет"], ["инвесткопилка"])
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query)
+        self.assertEqual(params["session"], ["12"])
+        self.assertEqual(params["description"], ["авито"])
+        self.assertEqual(params["source_category"], ["супермаркет"])
+        self.assertEqual(params["exclude_category"], ["инвесткопилка"])
 
 
 class RuleEngineAndCategorizationTest(TestCase):

@@ -8,6 +8,7 @@ from typing import Any
 from django.db import transaction as db_transaction
 from django.utils import timezone
 
+from core.currencies import split_stable_quote_pair
 from core.models import CurrencyRate
 from core.services.bybit_market import fetch_bybit_spot_prices
 from core.services.crypto_rates import sync_crypto_rates_incremental
@@ -78,11 +79,13 @@ def ensure_default_assets(user) -> int:
 
 
 def active_asset_symbols(user) -> list[str]:
-    return list(
-        CryptoAsset.objects.filter(user=user, is_active=True)
+    return [
+        symbol
+        for symbol in CryptoAsset.objects.filter(user=user, is_active=True)
         .order_by('sort_order', 'symbol')
         .values_list('symbol', flat=True)
-    )
+        if symbol.upper() not in USD_EQUIVALENTS
+    ]
 
 
 def _quantize(value: Decimal) -> Decimal:
@@ -99,6 +102,7 @@ def _parse_decimal(raw) -> Decimal | None:
 
 
 def _latest_rate(symbol: str, as_of: date) -> Decimal | None:
+    symbol = (symbol or '').upper()
     if symbol in USD_EQUIVALENTS:
         usd = (
             CurrencyRate.objects.filter(currency='USD', date__lte=as_of)
@@ -184,7 +188,7 @@ def _build_extended_asset_map(user) -> dict[str, CryptoAsset]:
 
 def _resolve_portfolio_asset(asset_map: dict[str, CryptoAsset], coin: str) -> CryptoAsset | None:
     coin = (coin or '').upper()
-    if not coin:
+    if not coin or coin in USD_EQUIVALENTS:
         return None
     if coin in asset_map:
         return asset_map[coin]
@@ -209,7 +213,7 @@ def _wallet_balance_for_symbol(symbol: str, balances: dict[str, Decimal]) -> Dec
 def _trade_symbol_from_event(event: BybitExternalEvent) -> str:
     payload = event.raw_payload or {}
     symbol = str(payload.get('symbol') or event.description or '').upper().strip()
-    if symbol.endswith('USDT') and len(symbol) > 4:
+    if split_stable_quote_pair(symbol):
         return symbol
     if symbol and symbol not in USD_EQUIVALENTS:
         return f'{symbol}USDT'
@@ -519,25 +523,25 @@ def _parse_trade_events(
     trade_events = [event for event in events if _is_trade_event(event)]
     token_events = [
         event for event in trade_events
-        if (event.asset or '').upper() != 'USDT'
+        if (event.asset or '').upper() not in USD_EQUIVALENTS
         and _resolve_portfolio_asset(asset_map, (event.asset or '').upper()) is not None
     ]
-    usdt_events = [
+    quote_events = [
         event for event in trade_events
-        if (event.asset or '').upper() == 'USDT' and event.amount not in (None, Decimal('0'))
+        if (event.asset or '').upper() in USD_EQUIVALENTS and event.amount not in (None, Decimal('0'))
     ]
 
     parsed = []
     used_tokens: set[int] = set()
-    used_usdt: set[int] = set()
+    used_quotes: set[int] = set()
 
-    for usdt_event in usdt_events:
-        if usdt_event.id in used_usdt:
+    for quote_event in quote_events:
+        if quote_event.id in used_quotes:
             continue
-        usdt_amount = usdt_event.amount or Decimal('0')
-        sell = usdt_amount > 0
+        quote_amount = quote_event.amount or Decimal('0')
+        sell = quote_amount > 0
         token_event = _match_trade_token(
-            usdt_event,
+            quote_event,
             token_events,
             asset_map,
             used_tokens=used_tokens,
@@ -551,16 +555,16 @@ def _parse_trade_events(
             continue
 
         if not sell:
-            fp = _tx_fingerprint(asset.symbol, token_event.occurred_at or usdt_event.occurred_at, token_event.amount)
+            fp = _tx_fingerprint(asset.symbol, token_event.occurred_at or quote_event.occurred_at, token_event.amount)
             if fp in convert_fingerprints:
                 continue
 
         used_tokens.add(token_event.id)
-        used_usdt.add(usdt_event.id)
+        used_quotes.add(quote_event.id)
         qty = abs(token_event.amount)
-        quote = abs(usdt_amount)
-        fee = _parse_trade_fee_usd(usdt_event) + _parse_trade_fee_usd(token_event)
-        occurred_at = token_event.occurred_at or usdt_event.occurred_at or timezone.now()
+        quote = abs(quote_amount)
+        fee = _parse_trade_fee_usd(quote_event) + _parse_trade_fee_usd(token_event)
+        occurred_at = token_event.occurred_at or quote_event.occurred_at or timezone.now()
 
         if sell:
             parsed.append({
@@ -571,7 +575,7 @@ def _parse_trade_events(
                 'total_quote': quote,
                 'fee_quote': fee,
                 'source': CryptoTransaction.Source.BYBIT_TRADE,
-                'external_key': f'bybit:sell:{usdt_event.connection_id}:{usdt_event.external_id}:{token_event.external_id}',
+                'external_key': f'bybit:sell:{quote_event.connection_id}:{quote_event.external_id}:{token_event.external_id}',
                 'bybit_event': token_event,
             })
         else:
@@ -583,7 +587,7 @@ def _parse_trade_events(
                 'total_quote': quote,
                 'fee_quote': fee,
                 'source': CryptoTransaction.Source.BYBIT_TRADE,
-                'external_key': f'bybit:trade:{usdt_event.connection_id}:{usdt_event.external_id}:{token_event.external_id}',
+                'external_key': f'bybit:trade:{quote_event.connection_id}:{quote_event.external_id}:{token_event.external_id}',
                 'bybit_event': token_event,
             })
     return parsed
@@ -625,7 +629,7 @@ def sync_wallet_balances_from_bybit(user, connection: BybitConnection | None = N
     now = timezone.now()
     updated = 0
     for symbol, asset in asset_map.items():
-        if symbol in BYBIT_COIN_ALIASES:
+        if symbol in BYBIT_COIN_ALIASES or symbol in USD_EQUIVALENTS:
             continue
         qty = _wallet_balance_for_symbol(symbol, balances)
         if qty is None:
@@ -741,6 +745,8 @@ def sync_crypto_rates(user, rate_date: date | None = None) -> dict:
         bybit_quotes = fetch_bybit_spot_prices(symbols)
         result['quotes'] = bybit_quotes
         for asset in CryptoAsset.objects.filter(user=user, is_active=True):
+            if asset.symbol.upper() in USD_EQUIVALENTS:
+                continue
             quote = bybit_quotes.get(asset.symbol.upper())
             if not quote:
                 result['skipped'].append(asset.symbol)
@@ -844,7 +850,11 @@ def _compute_asset_summary(asset: CryptoAsset, txs: list[CryptoTransaction], as_
 
 def get_portfolio_summary(user, as_of: date | None = None) -> dict[str, Any]:
     as_of = as_of or timezone.localdate()
-    assets = list(CryptoAsset.objects.filter(user=user, is_active=True).order_by('sort_order', 'symbol'))
+    assets = [
+        asset
+        for asset in CryptoAsset.objects.filter(user=user, is_active=True).order_by('sort_order', 'symbol')
+        if asset.symbol.upper() not in USD_EQUIVALENTS
+    ]
     txs_by_asset: dict[int, list[CryptoTransaction]] = {}
     for tx in CryptoTransaction.objects.filter(user=user, asset__in=assets).select_related('asset'):
         txs_by_asset.setdefault(tx.asset_id, []).append(tx)

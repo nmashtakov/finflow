@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 
+from core.currencies import USD_STABLECOINS
+
 
 DEFAULT_CRYPTO_ASSETS = (
     ('BTC', 'Bitcoin'),
@@ -15,7 +17,7 @@ DEFAULT_CRYPTO_ASSETS = (
     ('DOGE', 'Dogecoin'),
 )
 
-QUOTE_CURRENCIES = {'USDT', 'USD', 'USDC'}
+QUOTE_CURRENCIES = set(USD_STABLECOINS) | {'USD'}
 
 
 class CryptoAsset(models.Model):

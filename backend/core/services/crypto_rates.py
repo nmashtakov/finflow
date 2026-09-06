@@ -11,15 +11,16 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 from django.utils import timezone
 
+from core.currencies import USD_STABLECOINS
 from core.models import Currency, CurrencyRate
 
 
 CBR_FIAT_CODES = {
     'RUB', 'USD', 'EUR', 'KZT', 'KGS', 'GBP', 'CHF', 'JPY', 'CNY',
     'UAH', 'BYN', 'CAD', 'AUD', 'NOK', 'SEK', 'TRY', 'AED', 'HKD',
-    'SGD', 'THB', 'VND', 'INR', 'IDR', 'MYR', 'PHP', 'USDT', 'USDC',
+    'SGD', 'THB', 'VND', 'INR', 'IDR', 'MYR', 'PHP',
     'AMD', 'KRW', 'GEL', 'AZN', 'BRL', 'MXN', 'PLN', 'CZK', 'HUF',
-}
+} | set(USD_STABLECOINS)
 
 CRYPTOCOMPARE_HISTODAY_URL = 'https://min-api.cryptocompare.com/data/v2/histoday'
 BINANCE_KLINES_URL = 'https://api.binance.com/api/v3/klines'

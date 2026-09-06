@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.utils import timezone
 
+from core.currencies import currencies_need_usd_rate, fx_currency_code
 from .forms import (
     ProjectForm,
     CategoryForm,
@@ -98,7 +99,7 @@ def _build_rate_lookup(tx_list, report_currency):
     currencies.add('RUB')
     if report_currency:
         currencies.add((report_currency or '').upper())
-    if 'USDT' in currencies:
+    if currencies_need_usd_rate(currencies):
         currencies.add('USD')
     date_points = [timezone.localtime(tx.date).date() for tx in tx_list]
     if not date_points:
@@ -120,8 +121,7 @@ def _build_rate_lookup(tx_list, report_currency):
 
 
 def _rate_on_date(rate_lookup, currency, target_date):
-    if currency == 'USDT':
-        currency = 'USD'
+    currency = fx_currency_code(currency) or 'RUB'
     if currency == 'RUB':
         return Decimal('1')
     rows = rate_lookup.get(currency) or []
@@ -137,7 +137,7 @@ def _rate_on_date(rate_lookup, currency, target_date):
 def _convert_amount(amount, source_currency, target_currency, target_date, rate_lookup):
     source = (source_currency or '').upper()
     target = (target_currency or '').upper()
-    if not target or source == target:
+    if not target or source == target or fx_currency_code(source) == fx_currency_code(target):
         return Decimal(amount or 0)
     source_rate = _rate_on_date(rate_lookup, source, target_date)
     target_rate = _rate_on_date(rate_lookup, target, target_date)
@@ -1716,6 +1716,8 @@ def currencies_directory(request):
         "EUR": "Евро",
         "JPY": "Японская иена",
         "USDT": "Тезер (USDT)",
+        "USDC": "USD Coin (USDC)",
+        "USDE": "Ethena USDe (USDE)",
         "TRY": "Турецкая лира",
         "CNY": "Китайский юань",
         "GBP": "Фунт стерлингов",
@@ -1908,6 +1910,8 @@ def currency_converter_view(request):
         "EUR": "Евро",
         "JPY": "Японская иена",
         "USDT": "Тезер (USDT)",
+        "USDC": "USD Coin (USDC)",
+        "USDE": "Ethena USDe (USDE)",
         "TRY": "Турецкая лира",
         "CNY": "Китайский юань",
         "GBP": "Фунт стерлингов",

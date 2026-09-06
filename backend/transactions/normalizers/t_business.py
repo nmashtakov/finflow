@@ -10,6 +10,7 @@ class TBusinessNormalizer(GenericNormalizer):
 
         payment_number = self.normalize_string(
             row.get("Номер платежа")
+            or row.get("Номер документа")
             or row.get("payment_number")
             or row.get("payment_id")
         )
@@ -18,16 +19,18 @@ class TBusinessNormalizer(GenericNormalizer):
             or row.get("Наименование плательщика")
             or row.get("Наименование получателя")
         )
-        description = self.normalize_string(
+        operation_title = self.normalize_string(row.get("Описание операции"))
+        purpose = self.normalize_string(
             row.get("Назначение платежа")
-            or row.get("Описание операции")
+            or (row.get(context.column_comment) if context.column_comment else "")
             or normalized.original_description
         )
+        description = purpose or operation_title
 
-        if normalized.currency == "643":
+        if normalized.currency in {"643", "RUR"}:
             normalized.currency = "RUB"
         normalized.external_id = payment_number or normalized.external_id
-        normalized.source_category_norm = self.normalize_text(row.get(context.column_type)) if context.column_type else ""
+        normalized.source_category_norm = self.normalize_text(operation_title)
         normalized.description_norm = self.normalize_text(description)
         normalized.merchant_norm = self.normalize_text(counterparty) if counterparty else self.extract_merchant(description)
         normalized.original_description = description or normalized.original_description

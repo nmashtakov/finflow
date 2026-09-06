@@ -20,6 +20,7 @@ from django.db.models import Q
 from django.views.decorators.http import require_GET, require_POST
 from urllib.parse import urlencode
 
+from core.currencies import fx_currency_code, is_usd_stablecoin
 from core.models import (
     Account,
     Category,
@@ -66,26 +67,105 @@ def _normalize_string(value):
     return str(value).strip()
 
 
+IMPORT_HEADER_TOKENS = {
+    'дата операции',
+    'дата проведения',
+    'сумма операции',
+    'сумма в валюте счета',
+    'назначение платежа',
+    'описание',
+    'описание операции',
+    'категория',
+    'категория по-умолчанию',
+    'тип операции',
+    'тип операции (пополнение/списание)',
+    'валюта операции',
+    'номер карты',
+    'имя счета',
+}
+
+
+def _normalize_column_key(value):
+    return str(value or '').strip().lower().replace('ё', 'е')
+
+
+def _column_key_set(columns):
+    return {_normalize_column_key(col) for col in (columns or [])}
+
+
+def _row_cell_values(row):
+    values = []
+    for value in list(row):
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            values.append('')
+        else:
+            values.append(str(value).strip())
+    return values
+
+
+def _is_import_header_row(values):
+    keys = {_normalize_column_key(value) for value in values if value}
+    return len(keys & IMPORT_HEADER_TOKENS) >= 3
+
+
+def _unique_column_names(names):
+    seen = {}
+    result = []
+    for name in names:
+        label = name.strip() if name and str(name).strip() else 'column'
+        count = seen.get(label, 0)
+        seen[label] = count + 1
+        result.append(label if count == 0 else f'{label}_{count}')
+    return result
+
+
+def _extract_tabular_frame(df_raw):
+    df_raw = df_raw.replace(r'^\s*$', pd.NA, regex=True)
+    header_idx = 0
+    for idx in range(min(len(df_raw), 40)):
+        if _is_import_header_row(_row_cell_values(df_raw.iloc[idx])):
+            header_idx = idx
+            break
+    columns = _unique_column_names(_row_cell_values(df_raw.iloc[header_idx]))
+    body = df_raw.iloc[header_idx + 1:].copy()
+    body.columns = columns
+    body = body.dropna(how='all')
+    body = body.astype(object).where(pd.notna(body), '')
+    return body
+
+
+def _read_csv_dataframe(data):
+    last_exc = None
+    for encoding in ('utf-8-sig', 'utf-8', 'cp1251'):
+        for sep in (None, ';'):
+            try:
+                return pd.read_csv(
+                    io.BytesIO(data),
+                    sep=sep,
+                    engine='python',
+                    encoding=encoding,
+                    header=None,
+                )
+            except Exception as exc:
+                last_exc = exc
+    raise ImportRowError('Не удалось прочитать CSV. Убедитесь, что формат поддерживается.') from last_exc
+
+
 def _read_import_file(uploaded_file, *, original_name=None, sheet_name=None):
     original_name = original_name or getattr(uploaded_file, 'name', 'upload')
     filename = original_name.lower()
     try:
         if filename.endswith('.csv'):
             data = uploaded_file.read()
-            buffer = io.BytesIO(data)
-            try:
-                df = pd.read_csv(buffer, sep=None, engine='python')
-            except Exception:
-                buffer.seek(0)
-                df = pd.read_csv(buffer, sep=';', engine='python')
+            df_raw = _read_csv_dataframe(data)
         else:
-            df = pd.read_excel(uploaded_file, sheet_name=sheet_name or 0)
+            df_raw = pd.read_excel(uploaded_file, sheet_name=sheet_name or 0, header=None)
+    except ImportRowError:
+        raise
     except Exception as exc:
         raise ImportRowError('Не удалось прочитать файл. Убедитесь, что формат поддерживается.') from exc
 
-    df = df.replace(r'^\s*$', pd.NA, regex=True)
-    df = df.dropna(how='all')
-    df = df.fillna('')
+    df = _extract_tabular_frame(df_raw)
     columns = [str(col).strip() for col in df.columns]
     df.columns = columns
     sample_rows = json.loads(df.head(10).to_json(orient='records', force_ascii=False, date_format='iso'))
@@ -112,6 +192,7 @@ AUTO_COLUMN_HINTS = {
 
 KNOWN_CURRENCY_CODES = {
     'RUB', 'USD', 'EUR', 'KZT', 'KGS', 'GBP', 'CHF', 'JPY', 'CNY', 'UAH', 'BYN', 'CAD', 'AUD', 'NOK', 'SEK',
+    'USDT', 'USDC', 'USDE',
 }
 INCOME_VALUE_MARKERS = {'доход', 'поступление', 'пополнение', 'кредит', 'income', 'credit', 'приход'}
 EXPENSE_VALUE_MARKERS = {'расход', 'списание', 'перевод', 'дебет', 'expense', 'debit', 'платеж', 'платёж'}
@@ -218,8 +299,7 @@ def _auto_detect_columns(columns, sample_rows):
 
 
 def _infer_preset(columns):
-    lower_cols = [col.lower() for col in columns]
-    if 'дата операции' in lower_cols and 'сумма операции' in lower_cols and 'категория' in lower_cols and 'описание' in lower_cols:
+    if _is_tinkoff_columns(columns):
         return 'tinkoff'
     if _is_alfa_columns(columns):
         return 'alfa'
@@ -253,21 +333,23 @@ def _get_or_create_import_source(preset_code):
 
 
 TINKOFF_REQUIRED_COLUMNS = ['дата операции', 'сумма операции', 'описание']
+TINKOFF_CATEGORY_ALIASES = ['Категория по-умолчанию', 'Категория', 'Ваша категория']
 ALFA_REQUIRED_COLUMN_GROUPS = [
     {'дата операции', 'сумма', 'категория', 'описание операции'},
     {'operationdate', 'amount', 'category', 'merchant'},
 ]
-T_BUSINESS_REQUIRED_COLUMNS = [
-    'тип операции (пополнение/списание)',
-    'дата проведения',
-    'сумма в валюте счёта',
-    'назначение платежа',
+T_BUSINESS_REQUIRED_COLUMN_GROUPS = [
+    {'тип операции (пополнение/списание)', 'дата проведения', 'сумма в валюте счета', 'назначение платежа'},
+    {'тип операции', 'дата проведения', 'сумма в валюте счета', 'назначение платежа'},
 ]
 
 
 def _is_tinkoff_columns(columns):
-    lower_cols = [str(col).strip().lower() for col in (columns or [])]
-    return all(col in lower_cols for col in TINKOFF_REQUIRED_COLUMNS)
+    lower_cols = _column_key_set(columns)
+    has_core = all(_normalize_column_key(col) in lower_cols for col in TINKOFF_REQUIRED_COLUMNS)
+    has_category = any(_normalize_column_key(alias) in lower_cols for alias in TINKOFF_CATEGORY_ALIASES)
+    has_account_name = any(_normalize_column_key(alias) in lower_cols for alias in ['Имя счёта', 'Имя счета'])
+    return has_core and (has_category or has_account_name)
 
 
 def _is_alfa_columns(columns):
@@ -276,14 +358,16 @@ def _is_alfa_columns(columns):
 
 
 def _is_t_business_columns(columns):
-    lower_cols = {str(col).strip().lower() for col in (columns or [])}
-    return all(col in lower_cols for col in T_BUSINESS_REQUIRED_COLUMNS)
+    lower_cols = _column_key_set(columns)
+    return any(group <= lower_cols for group in T_BUSINESS_REQUIRED_COLUMN_GROUPS)
 
 
 def _find_column_by_aliases(columns, aliases):
-    normalized = {str(col).strip().lower(): col for col in columns}
+    normalized = {}
+    for col in columns or []:
+        normalized.setdefault(_normalize_column_key(col), col)
     for alias in aliases:
-        found = normalized.get(alias.lower())
+        found = normalized.get(_normalize_column_key(alias))
         if found:
             return found
     return ''
@@ -295,8 +379,8 @@ def _build_tinkoff_mapping(session, cleaned_account_data):
         'column_date': _find_column_by_aliases(columns, ['Дата операции', 'Дата']),
         'column_amount': _find_column_by_aliases(columns, ['Сумма операции', 'Сумма']),
         'column_currency': _find_column_by_aliases(columns, ['Валюта операции', 'Валюта']),
-        'column_comment': _find_column_by_aliases(columns, ['Описание', 'Комментарий']),
-        'column_category': _find_column_by_aliases(columns, ['Категория']),
+        'column_comment': _find_column_by_aliases(columns, ['Сообщение', 'Описание', 'Комментарий']),
+        'column_category': _find_column_by_aliases(columns, TINKOFF_CATEGORY_ALIASES),
         'column_subcategory': '',
         'column_type': '',
         'default_currency': (cleaned_account_data.get('default_currency') or 'RUB').strip().upper(),
@@ -332,11 +416,11 @@ def _build_t_business_mapping(session, cleaned_account_data):
     mapping = {
         'column_date': _find_column_by_aliases(columns, ['Дата проведения']),
         'column_amount': _find_column_by_aliases(columns, ['Сумма в валюте счёта', 'Сумма в валюте счета']),
-        'column_currency': '',
-        'column_comment': _find_column_by_aliases(columns, ['Назначение платежа']),
-        'column_category': '',
+        'column_currency': _find_column_by_aliases(columns, ['Валюта счёта', 'Валюта операции']),
+        'column_comment': _find_column_by_aliases(columns, ['Назначение платежа', 'Описание операции']),
+        'column_category': _find_column_by_aliases(columns, ['Описание операции']),
         'column_subcategory': '',
-        'column_type': _find_column_by_aliases(columns, ['Тип операции (пополнение/списание)']),
+        'column_type': _find_column_by_aliases(columns, ['Тип операции (пополнение/списание)', 'Тип операции']),
         'default_currency': (cleaned_account_data.get('default_currency') or 'RUB').strip().upper(),
         'income_markers': 'доход,поступление,пополнение,кредит,income,credit',
         'expense_markers': 'расход,списание,дебет,expense,debit',
@@ -439,9 +523,7 @@ def _format_amount_short(value):
 
 
 def _rate_on_or_before(currency_code, rate_date):
-    code = (currency_code or "").strip().upper()
-    if code == "USDT":
-        code = "USD"
+    code = fx_currency_code(currency_code) or "RUB"
     if code == "RUB":
         return Decimal("1")
     row = (
@@ -456,7 +538,7 @@ def _rate_on_or_before(currency_code, rate_date):
 def _convert_transaction_amount(tx, target_currency):
     target = (target_currency or "").strip().upper()
     source = (tx.currency or "").strip().upper()
-    if not target or source == target:
+    if not target or source == target or fx_currency_code(source) == fx_currency_code(target):
         return tx.amount
     rate_date = timezone.localtime(tx.date).date()
     source_rate = _rate_on_or_before(source, rate_date)
@@ -469,7 +551,7 @@ def _convert_transaction_amount(tx, target_currency):
 def _convert_amount_value(amount, currency_code, occurred_at, target_currency):
     target = (target_currency or "").strip().upper()
     source = (currency_code or "").strip().upper()
-    if not target or source == target:
+    if not target or source == target or fx_currency_code(source) == fx_currency_code(target):
         return Decimal(amount)
     rate_date = timezone.localtime(occurred_at).date()
     source_rate = _rate_on_or_before(source, rate_date)
@@ -633,6 +715,44 @@ def _review_display_value(imported_tx, mapping_key, fallback):
     if column_name and column_name in raw_payload and str(raw_payload.get(column_name) or "").strip():
         return str(raw_payload.get(column_name)).strip()
     return fallback or "—"
+
+
+def _review_comment_display(imported_tx):
+    raw_payload = imported_tx.raw_payload or {}
+    comment = (imported_tx.original_description or "").strip()
+    extras = [
+        str(raw_payload.get("Сообщение") or raw_payload.get("message") or "").strip(),
+        str(raw_payload.get("Назначение платежа") or "").strip(),
+    ]
+    for extra in extras:
+        if extra and extra not in comment:
+            comment = f"{comment} — {extra}" if comment else extra
+    if comment:
+        return comment
+    return _review_display_value(imported_tx, "column_comment", imported_tx.description_norm)
+
+
+def _multi_filter_values(request, name):
+    values = []
+    keys = (name, f"filter_{name}")
+    for key in keys:
+        for raw in list(request.GET.getlist(key)) + list(request.POST.getlist(key)):
+            for part in str(raw or "").split("|"):
+                item = part.strip()
+                if item and item not in values:
+                    values.append(item)
+    return values
+
+
+def _review_filter_query(session_id, description_filter, include_cats, exclude_cats, page=None):
+    params = [('session', str(session_id))]
+    if description_filter:
+        params.append(('description', description_filter))
+    params.extend(('source_category', value) for value in include_cats)
+    params.extend(('exclude_category', value) for value in exclude_cats)
+    if page:
+        params.append(('page', str(page)))
+    return urlencode(params)
 
 
 @login_required
@@ -1778,8 +1898,13 @@ def transaction_import_review(request):
         return redirect("transactions:import")
     session = get_object_or_404(TransactionImportSession, pk=session_id, user=request.user)
 
-    description_filter = (request.GET.get("description") or request.POST.get("description") or "").strip()
-    source_category_filter = (request.GET.get("source_category") or request.POST.get("source_category") or "").strip()
+    description_filter = (
+        request.GET.get("description")
+        or request.POST.get("filter_description")
+        or ""
+    ).strip()
+    source_category_filters = _multi_filter_values(request, "source_category")
+    exclude_category_filters = _multi_filter_values(request, "exclude_category")
 
     review_qs = ImportedTransaction.objects.filter(
         session=session,
@@ -1788,20 +1913,21 @@ def transaction_import_review(request):
         is_split_parent=False,
     ).order_by("-occurred_at", "id")
     if description_filter:
-        review_qs = review_qs.filter(description_norm__icontains=description_filter)
-    if source_category_filter:
-        review_qs = review_qs.filter(source_category_norm__icontains=source_category_filter)
+        review_qs = review_qs.filter(
+            Q(description_norm__icontains=description_filter)
+            | Q(original_description__icontains=description_filter)
+            | Q(merchant_norm__icontains=description_filter)
+        )
+    if source_category_filters:
+        review_qs = review_qs.filter(source_category_norm__in=source_category_filters)
+    if exclude_category_filters:
+        review_qs = review_qs.exclude(source_category_norm__in=exclude_category_filters)
 
     def _is_ajax_request():
         return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
     def _redirect_review():
-        params = {"session": session.id}
-        if description_filter:
-            params["description"] = description_filter
-        if source_category_filter:
-            params["source_category"] = source_category_filter
-        return redirect(f"{reverse('transactions:review')}?{urlencode(params)}")
+        return redirect(f"{reverse('transactions:review')}?{_review_filter_query(session.id, description_filter, source_category_filters, exclude_category_filters)}")
 
     def _error_response(message, status=400):
         if _is_ajax_request():
@@ -1956,8 +2082,8 @@ def transaction_import_review(request):
                 )
             )
             filters = {
-                "description_norm": request.POST.get("description", ""),
-                "source_category_norm": request.POST.get("source_category", ""),
+                "description_norm": "",
+                "source_category_norm": "",
             }
             if not any((filters.get("description_norm"), filters.get("source_category_norm"))):
                 if selected_items:
@@ -2024,13 +2150,26 @@ def transaction_import_review(request):
                 "amount_raw": str(item.amount or ""),
                 "is_income": is_income,
                 "currency": item.currency,
-                "description_display": _review_display_value(item, "column_comment", item.original_description or item.description_norm),
-                "source_category_display": _review_display_value(item, "column_category", item.source_category_norm),
-                "comment_display": item.original_description or "",
+                "description_display": _review_comment_display(item),
+                "source_category_display": item.source_category_norm or _review_display_value(item, "column_category", ""),
+                "comment_display": _review_comment_display(item),
                 "status": item.categorization_status,
                 "resolved_expense_link_id": item.resolved_expense_link_id,
             }
         )
+
+    source_category_options = list(
+        ImportedTransaction.objects.filter(
+            session=session,
+            user=request.user,
+            final_transaction__isnull=True,
+            is_split_parent=False,
+        )
+        .exclude(source_category_norm="")
+        .values_list("source_category_norm", flat=True)
+        .distinct()
+        .order_by("source_category_norm")
+    )
 
     expense_links = (
         ExpenseLink.objects.filter(
@@ -2051,7 +2190,15 @@ def transaction_import_review(request):
             "items": review_page,
             "review_rows": review_rows,
             "description_filter": description_filter,
-            "source_category_filter": source_category_filter,
+            "source_category_filters": source_category_filters,
+            "exclude_category_filters": exclude_category_filters,
+            "source_category_options": source_category_options,
+            "review_query": _review_filter_query(
+                session.id,
+                description_filter,
+                source_category_filters,
+                exclude_category_filters,
+            ),
             "expense_links": expense_links,
         },
     )
@@ -2651,9 +2798,8 @@ BANK_PRESET_MAPPINGS = {
         'column_date': 'Дата операции',
         'column_amount': 'Сумма операции',
         'column_currency': 'Валюта операции',
-        'column_category': 'Категория',
-        'column_comment': 'Описание',
-        'column_account': 'Номер карты',
+        'column_category': 'Категория по-умолчанию',
+        'column_comment': 'Сообщение',
         'default_project_name': 'Тинькофф',
         'default_account_name': 'Карта Тинькофф',
     },
@@ -2670,7 +2816,9 @@ BANK_PRESET_MAPPINGS = {
     't_business': {
         'column_date': 'Дата проведения',
         'column_amount': 'Сумма в валюте счёта',
-        'column_type': 'Тип операции (пополнение/списание)',
+        'column_currency': 'Валюта счёта',
+        'column_type': 'Тип операции',
+        'column_category': 'Описание операции',
         'column_comment': 'Назначение платежа',
         'default_currency': 'RUB',
         'income_markers': 'доход,поступление,пополнение,кредит,income,credit',
@@ -2746,14 +2894,14 @@ def _transform_bybit_events_for_import(events):
     consumed = set()
     rows = []
 
-    # 1) Подготовка пар TRADE: расход USDT + покупка токена.
+    # 1) Подготовка пар TRADE: расход стейблкоина + покупка токена.
     trade_token_map = {}
     for event in sorted_events:
         if event.stream != "uta_translog":
             continue
         if (event.description or "").upper() != "TRADE":
             continue
-        if (event.asset or "").upper() == "USDT":
+        if is_usd_stablecoin(event.asset):
             continue
         if not event.amount or event.amount <= 0:
             continue
@@ -2778,7 +2926,7 @@ def _transform_bybit_events_for_import(events):
         event
         for event in sorted_events
         if event.stream == "funding_history"
-        and (event.asset or "").upper() == "USDT"
+        and is_usd_stablecoin(event.asset)
         and event.amount
         and event.amount < 0
         and (event.description or "").lower() == "purchase"
@@ -2822,8 +2970,8 @@ def _transform_bybit_events_for_import(events):
             _make_bybit_row(
                 best,
                 amount=-exchange_amount,
-                currency="USDT",
-                description="Exchange USDT->USD",
+                currency=(best.asset or "USDT").upper(),
+                description=f"Exchange {(best.asset or 'USDT').upper()}->USD",
                 source_category="EXCHANGE_USDT",
             )
         )
@@ -2832,7 +2980,7 @@ def _transform_bybit_events_for_import(events):
                 _make_bybit_row(
                     best,
                     amount=-fee_amount,
-                    currency="USDT",
+                    currency=(best.asset or "USDT").upper(),
                     description="Exchange fee",
                     source_category="EXCHANGE_FEE",
                     event_id=f"{best.id}:fee:{coin_event.id}",
@@ -2844,13 +2992,13 @@ def _transform_bybit_events_for_import(events):
         if event.id in consumed:
             continue
         currency = (event.asset or "").upper()
-        if currency != "USDT" and not _is_fiat_currency(currency):
+        if not is_usd_stablecoin(currency) and not _is_fiat_currency(currency):
             continue
 
         description = event.description or ""
         source_category = _bybit_source_category(event)
 
-        if event.stream == "uta_translog" and (event.description or "").upper() == "TRADE" and currency == "USDT":
+        if event.stream == "uta_translog" and (event.description or "").upper() == "TRADE" and is_usd_stablecoin(currency):
             symbol = BaseNormalizer.normalize_string(event.raw_payload.get("symbol")).upper()
             key = (event.occurred_at, symbol)
             token_events = trade_token_map.get(key, [])
@@ -2876,6 +3024,116 @@ def _transform_bybit_events_for_import(events):
         )
 
     return rows
+
+
+BYBIT_STREAM_OPTIONS = [
+    ("uta_translog", "UNIFIED — журнал"),
+    ("funding_history", "FUND — история"),
+    ("convert_history", "Конвертации"),
+]
+BYBIT_STREAM_LABELS = dict(BYBIT_STREAM_OPTIONS)
+
+
+def _bybit_page_url(connection_id, extra=None):
+    params = [("connection", str(connection_id))]
+    for key, value in (extra or {}).items():
+        if value in (None, ""):
+            continue
+        if isinstance(value, (list, tuple)):
+            params.extend((key, item) for item in value if item)
+        else:
+            params.append((key, str(value)))
+    return f"{reverse('transactions:bybit')}?{urlencode(params)}"
+
+
+def _parse_bybit_date_range(date_from_value, date_to_value):
+    date_from_value = (date_from_value or "").strip()
+    date_to_value = (date_to_value or "").strip()
+    if not (date_from_value and date_to_value):
+        raise ValueError("Укажите период: дату «от» и дату «до».")
+    try:
+        date_from = datetime.strptime(date_from_value, "%Y-%m-%d").date()
+        date_to = datetime.strptime(date_to_value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("Неверный формат дат. Используйте календарь.") from exc
+    if date_from > date_to:
+        raise ValueError("Дата «от» не может быть позже даты «до».")
+    start_dt = timezone.make_aware(datetime.combine(date_from, time.min), timezone.get_current_timezone())
+    end_dt = timezone.make_aware(datetime.combine(date_to, time.max), timezone.get_current_timezone())
+    return date_from_value, date_to_value, start_dt, end_dt
+
+
+def _create_bybit_review_session(user, connection, events):
+    if not events:
+        return None, "Нет новых операций Bybit для разметки. Сначала загрузите период."
+    bybit_source, _ = ImportSource.objects.get_or_create(code="bybit", defaults={"name": "Bybit"})
+    rows = _transform_bybit_events_for_import(events)
+    if not rows:
+        return None, "В разметку попадают только стейблкоины (USDT/USDC/USDE) и фиат. В выбранных событиях таких операций нет."
+    columns = [
+        "event_id",
+        "occurred_at",
+        "amount",
+        "currency",
+        "description",
+        "source_category",
+        "account_name",
+        "external_id",
+    ]
+    session = TransactionImportSession.objects.create(
+        user=user,
+        source=bybit_source,
+        status=TransactionImportSession.Status.UPLOADED,
+        total_rows=len(rows),
+        original_name=f"Bybit ({connection.name})",
+        columns=columns,
+        sample_rows=rows[:10],
+        rows=rows,
+        metadata={
+            "bank_preset": "bybit",
+            "connection_id": connection.id,
+        },
+    )
+    mapping_data = {
+        "column_date": "occurred_at",
+        "column_amount": "amount",
+        "column_currency": "currency",
+        "column_comment": "description",
+        "column_type": "",
+        "column_category": "source_category",
+        "column_subcategory": "",
+        "column_account": "account_name",
+        "default_currency": "USDT",
+        "income_markers": "",
+        "expense_markers": "",
+        "default_account_name": "",
+    }
+    normalize_result = normalize_rows(user, session, mapping_data)
+    session.metadata["last_mapping"] = mapping_data.copy()
+    session.save(update_fields=["metadata"])
+    categorize_result = categorize_session(user, session, mapping_data=mapping_data)
+
+    imported_items = list(ImportedTransaction.objects.filter(session=session).only("id", "raw_payload"))
+    imported_map = {}
+    for item in imported_items:
+        raw_event_id = BaseNormalizer.normalize_string((item.raw_payload or {}).get("event_id"))
+        if raw_event_id:
+            imported_map[raw_event_id] = item.id
+    events_to_update = []
+    for event in events:
+        imported_id = imported_map.get(str(event.id))
+        if imported_id:
+            event.imported_transaction_id = imported_id
+            events_to_update.append(event)
+    if events_to_update:
+        BybitExternalEvent.objects.bulk_update(events_to_update, fields=["imported_transaction"])
+
+    return session, {
+        "normalized": normalize_result.get("normalized", 0),
+        "duplicates": normalize_result.get("duplicates", 0),
+        "needs_review": categorize_result.get("needs_review", 0),
+        "rows": len(rows),
+    }
 
 
 @login_required
@@ -2923,50 +3181,40 @@ def bybit_connections(request):
 
 @login_required
 def bybit_staging(request):
-    stream_options = [
-        ("uta_translog", "UNIFIED: transaction log"),
-        ("funding_history", "FUND: history"),
-        ("convert_history", "Convert history"),
-    ]
-    selected_connection_id = request.GET.get("connection")
+    selected_connection_id = request.GET.get("connection") or request.POST.get("connection_id")
     connection = None
     if selected_connection_id and str(selected_connection_id).isdigit():
         connection = BybitConnection.objects.filter(user=request.user, pk=int(selected_connection_id)).first()
 
+    date_from_value = (request.GET.get("date_from") or request.POST.get("date_from") or "").strip()
+    date_to_value = (request.GET.get("date_to") or request.POST.get("date_to") or "").strip()
+    selected_streams = request.POST.getlist("streams") or request.GET.getlist("streams")
+
+    def _page_extra():
+        extra = {"date_from": date_from_value, "date_to": date_to_value, "streams": selected_streams}
+        extra.update({
+            "stream": request.GET.get("stream", "").strip(),
+            "asset": request.GET.get("asset", "").strip(),
+            "direction": request.GET.get("direction", "").strip(),
+            "q": request.GET.get("q", "").strip(),
+        })
+        return extra
+
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "sync_connection":
-            conn_id = request.POST.get("connection_id")
-            date_from_value = (request.POST.get("date_from") or "").strip()
-            date_to_value = (request.POST.get("date_to") or "").strip()
-            selected_streams = request.POST.getlist("streams")
-            start_dt = None
-            end_dt = None
-            if not (date_from_value and date_to_value):
-                messages.error(
-                    request,
-                    "Укажите диапазон дат: «Дата от» и «Дата до».",
-                    extra_tags="bybit",
-                )
-                return redirect(f"{reverse('transactions:bybit')}?connection={conn_id}")
+        conn_id = (request.POST.get("connection_id") or "").strip()
+        if action in {"sync_connection", "sync_and_review"}:
             try:
-                date_from = datetime.strptime(date_from_value, "%Y-%m-%d").date()
-                date_to = datetime.strptime(date_to_value, "%Y-%m-%d").date()
-                start_dt = timezone.make_aware(
-                    datetime.combine(date_from, time.min),
-                    timezone.get_current_timezone(),
+                date_from_value, date_to_value, start_dt, end_dt = _parse_bybit_date_range(
+                    request.POST.get("date_from"),
+                    request.POST.get("date_to"),
                 )
-                end_dt = timezone.make_aware(
-                    datetime.combine(date_to, time.max),
-                    timezone.get_current_timezone(),
-                )
-            except ValueError:
-                messages.error(
-                    request,
-                    "Неверный формат дат. Используйте ГГГГ-ММ-ДД.",
-                    extra_tags="bybit",
-                )
-                return redirect(f"{reverse('transactions:bybit')}?connection={conn_id}")
+            except ValueError as exc:
+                messages.error(request, str(exc), extra_tags="bybit")
+                return redirect(_bybit_page_url(conn_id, _page_extra()))
+            if not selected_streams:
+                messages.error(request, "Выберите хотя бы один тип операций.", extra_tags="bybit")
+                return redirect(_bybit_page_url(conn_id, _page_extra()))
             target_connection = get_object_or_404(BybitConnection, user=request.user, pk=conn_id)
             sync_run, stats = sync_bybit_transaction_log(
                 target_connection,
@@ -2975,31 +3223,69 @@ def bybit_staging(request):
                 start_dt=start_dt,
                 end_dt=end_dt,
             )
-            if sync_run.status == BybitSyncRun.Status.SUCCESS:
-                selected_streams_text = ", ".join(sync_run.streams or [])
-                summary = (
-                    f"Bybit sync завершен [{selected_streams_text}]: "
-                    f"fetched={stats['fetched']}, inserted={stats['inserted']}, updated={stats['updated']}."
+            page_extra = {
+                "date_from": date_from_value,
+                "date_to": date_to_value,
+                "streams": selected_streams,
+            }
+            if sync_run.status != BybitSyncRun.Status.SUCCESS:
+                messages.error(
+                    request,
+                    f"Не удалось загрузить операции из Bybit: {sync_run.message}",
+                    extra_tags="bybit",
                 )
-                if sync_run.message:
-                    summary = f"{summary} Предупреждения: {sync_run.message}"
-                messages.success(request, summary, extra_tags="bybit")
-            else:
-                messages.error(request, f"Bybit sync завершился с ошибкой: {sync_run.message}", extra_tags="bybit")
-            return redirect(f"{reverse('transactions:bybit')}?connection={target_connection.id}")
-        elif action == "create_import_session":
-            conn_id = (request.POST.get("connection_id") or "").strip()
-            target_connection = get_object_or_404(BybitConnection, user=request.user, pk=conn_id)
-            stream_filter = (request.POST.get("stream") or "").strip()
-            asset_filter = (request.POST.get("asset") or "").strip().upper()
-            direction_filter = (request.POST.get("direction") or "").strip()
-            search_filter = (request.POST.get("q") or "").strip()
+                return redirect(_bybit_page_url(target_connection.id, page_extra))
 
+            new_count = stats.get("inserted", 0)
+            updated_count = stats.get("updated", 0)
+            messages.success(
+                request,
+                f"Загружено из Bybit: новых {new_count}, обновлено {updated_count}.",
+                extra_tags="bybit",
+            )
+            if action == "sync_and_review":
+                events = list(
+                    BybitExternalEvent.objects.filter(
+                        connection=target_connection,
+                        imported_transaction__isnull=True,
+                        amount__isnull=False,
+                        occurred_at__gte=start_dt,
+                        occurred_at__lte=end_dt,
+                    ).order_by("-occurred_at", "-id")[:5000]
+                )
+                session, result = _create_bybit_review_session(request.user, target_connection, events)
+                if not session:
+                    messages.error(request, result, extra_tags="bybit")
+                    return redirect(_bybit_page_url(target_connection.id, page_extra))
+                messages.success(
+                    request,
+                    (
+                        f"Операции Bybit отправлены на разметку: {result['rows']}. "
+                        f"Нужна проверка: {result['needs_review']}."
+                    ),
+                )
+                return redirect(f"{reverse('transactions:review')}?session={session.id}")
+            return redirect(_bybit_page_url(target_connection.id, page_extra))
+
+        if action == "create_import_session":
+            target_connection = get_object_or_404(BybitConnection, user=request.user, pk=conn_id)
             events_qs = BybitExternalEvent.objects.filter(
                 connection=target_connection,
                 imported_transaction__isnull=True,
                 amount__isnull=False,
             ).order_by("-occurred_at", "-id")
+            try:
+                _, _, start_dt, end_dt = _parse_bybit_date_range(
+                    request.POST.get("date_from"),
+                    request.POST.get("date_to"),
+                )
+                events_qs = events_qs.filter(occurred_at__gte=start_dt, occurred_at__lte=end_dt)
+            except ValueError:
+                start_dt = None
+            stream_filter = (request.POST.get("stream") or "").strip()
+            asset_filter = (request.POST.get("asset") or "").strip().upper()
+            direction_filter = (request.POST.get("direction") or "").strip()
+            search_filter = (request.POST.get("q") or "").strip()
             if stream_filter:
                 events_qs = events_qs.filter(stream=stream_filter)
             if asset_filter:
@@ -3013,127 +3299,44 @@ def bybit_staging(request):
                     | Q(asset__icontains=search_filter)
                     | Q(stream__icontains=search_filter)
                 )
-
             events = list(events_qs[:5000])
-            if not events:
-                messages.error(
-                    request,
-                    "Нет новых событий Bybit для импорта в разметку. Сначала сделайте sync или снимите фильтры.",
-                    extra_tags="bybit",
-                )
-                return redirect(f"{reverse('transactions:bybit')}?connection={target_connection.id}")
-
-            bybit_source, _ = ImportSource.objects.get_or_create(
-                code="bybit",
-                defaults={"name": "Bybit"},
-            )
-            rows = _transform_bybit_events_for_import(events)
-            if not rows:
-                messages.error(
-                    request,
-                    "После преобразования не осталось операций для импорта (фиат + USDT).",
-                    extra_tags="bybit",
-                )
-                return redirect(f"{reverse('transactions:bybit')}?connection={target_connection.id}")
-            columns = [
-                "event_id",
-                "occurred_at",
-                "amount",
-                "currency",
-                "description",
-                "source_category",
-                "account_name",
-                "external_id",
-            ]
-            session = TransactionImportSession.objects.create(
-                user=request.user,
-                source=bybit_source,
-                status=TransactionImportSession.Status.UPLOADED,
-                total_rows=len(rows),
-                original_name=f"Bybit sync ({target_connection.name})",
-                columns=columns,
-                sample_rows=rows[:10],
-                rows=rows,
-                metadata={
-                    "bank_preset": "bybit",
-                    "connection_id": target_connection.id,
-                },
-            )
-
-            mapping_data = {
-                "column_date": "occurred_at",
-                "column_amount": "amount",
-                "column_currency": "currency",
-                "column_comment": "description",
-                "column_type": "",
-                "column_category": "source_category",
-                "column_subcategory": "",
-                "column_account": "account_name",
-                "default_currency": "USDT",
-                "income_markers": "",
-                "expense_markers": "",
-                "default_account_name": "",
-            }
-            normalize_result = normalize_rows(request.user, session, mapping_data)
-            mapping_snapshot = mapping_data.copy()
-            session.metadata["last_mapping"] = mapping_snapshot
-            session.save(update_fields=["metadata"])
-            categorize_result = categorize_session(request.user, session, mapping_data=mapping_data)
-
-            imported_items = list(
-                ImportedTransaction.objects.filter(session=session).only("id", "raw_payload")
-            )
-            imported_map = {}
-            for item in imported_items:
-                raw_event_id = BaseNormalizer.normalize_string(item.raw_payload.get("event_id"))
-                if raw_event_id:
-                    imported_map[raw_event_id] = item.id
-            events_to_update = []
-            for event in events:
-                imported_id = imported_map.get(str(event.id))
-                if imported_id:
-                    event.imported_transaction_id = imported_id
-                    events_to_update.append(event)
-            if events_to_update:
-                BybitExternalEvent.objects.bulk_update(events_to_update, fields=["imported_transaction"])
-
+            session, result = _create_bybit_review_session(request.user, target_connection, events)
+            if not session:
+                messages.error(request, result, extra_tags="bybit")
+                return redirect(_bybit_page_url(target_connection.id, _page_extra()))
             messages.success(
                 request,
                 (
-                    f"Создана сессия разметки Bybit #{session.id}: "
-                    f"normalized={normalize_result['normalized']}, "
-                    f"duplicates={normalize_result['duplicates']}, "
-                    f"needs_review={categorize_result['needs_review']}."
+                    f"Операции Bybit отправлены на разметку: {result['rows']}. "
+                    f"Нужна проверка: {result['needs_review']}."
                 ),
-                extra_tags="bybit",
             )
             return redirect(f"{reverse('transactions:review')}?session={session.id}")
-        elif action == "clear_staging":
-            conn_id = (request.POST.get("connection_id") or "").strip()
+
+        if action == "clear_staging":
             target_connection = get_object_or_404(BybitConnection, user=request.user, pk=conn_id)
             deleted_count, _ = BybitExternalEvent.objects.filter(connection=target_connection).delete()
             messages.success(
                 request,
-                f"Staging очищен: удалено событий {deleted_count}.",
+                f"Загруженные события Bybit удалены: {deleted_count}.",
                 extra_tags="bybit",
             )
-            return redirect(f"{reverse('transactions:bybit')}?connection={target_connection.id}")
-        else:
-            pass
+            return redirect(_bybit_page_url(target_connection.id, _page_extra()))
 
     connections = BybitConnection.objects.filter(user=request.user).order_by("-updated_at")
     if connection is None:
         connection = connections.first()
-    if request.method == "POST" and "form" in locals() and connection and form.instance.pk != connection.pk:
-        # keep explicit selection in case of invalid form submit on a different instance
-        pass
 
     events = []
     sync_runs = []
     sync_runs_page = None
     stream_choices = []
     asset_choices = []
-    direction_choices = BybitExternalEvent.Direction.choices
+    direction_choices = [
+        (BybitExternalEvent.Direction.IN, "Поступление"),
+        (BybitExternalEvent.Direction.OUT, "Списание"),
+        (BybitExternalEvent.Direction.UNKNOWN, "Неизвестно"),
+    ]
     event_filters = {
         "stream": request.GET.get("stream", "").strip(),
         "asset": request.GET.get("asset", "").strip().upper(),
@@ -3157,12 +3360,29 @@ def bybit_staging(request):
     }
     sort_value = allowed_sorts.get(event_filters["sort"], "-occurred_at")
     event_filters["sort"] = sort_value
+    total_count = 0
+    unimported_count = 0
+    unimported_in_period = 0
 
     if connection:
-        events_qs = BybitExternalEvent.objects.filter(connection=connection)
-        stream_choices = list(events_qs.values_list("stream", flat=True).distinct().order_by("stream"))
-        asset_choices = list(events_qs.exclude(asset="").values_list("asset", flat=True).distinct().order_by("asset"))
-
+        base_qs = BybitExternalEvent.objects.filter(connection=connection)
+        total_count = base_qs.count()
+        unimported_qs = base_qs.filter(imported_transaction__isnull=True, amount__isnull=False)
+        unimported_count = unimported_qs.count()
+        unimported_in_period = unimported_count
+        if date_from_value and date_to_value:
+            try:
+                _, _, start_dt, end_dt = _parse_bybit_date_range(date_from_value, date_to_value)
+                unimported_in_period = unimported_qs.filter(
+                    occurred_at__gte=start_dt,
+                    occurred_at__lte=end_dt,
+                ).count()
+            except ValueError:
+                unimported_in_period = unimported_count
+        stream_values = list(base_qs.values_list("stream", flat=True).distinct().order_by("stream"))
+        stream_choices = [(value, BYBIT_STREAM_LABELS.get(value, value)) for value in stream_values]
+        asset_choices = list(base_qs.exclude(asset="").values_list("asset", flat=True).distinct().order_by("asset"))
+        events_qs = base_qs
         if event_filters["stream"]:
             events_qs = events_qs.filter(stream=event_filters["stream"])
         if event_filters["asset"]:
@@ -3176,12 +3396,26 @@ def bybit_staging(request):
                 | Q(asset__icontains=event_filters["q"])
                 | Q(stream__icontains=event_filters["q"])
             )
-        events = events_qs.order_by(sort_value, "-id")[:300]
+        events = list(events_qs.order_by(sort_value, "-id")[:300])
+        for event in events:
+            event.stream_label = BYBIT_STREAM_LABELS.get(event.stream, event.stream)
+
+        if not date_from_value or not date_to_value:
+            last_run = BybitSyncRun.objects.filter(connection=connection).order_by("-id").first()
+            if last_run and last_run.range_from and last_run.range_to:
+                local_from = timezone.localtime(last_run.range_from)
+                local_to = timezone.localtime(last_run.range_to)
+                date_from_value = date_from_value or local_from.date().isoformat()
+                date_to_value = date_to_value or local_to.date().isoformat()
 
         sync_runs_qs = BybitSyncRun.objects.filter(connection=connection).order_by("-id")
         sync_runs_paginator = Paginator(sync_runs_qs, 5)
         sync_runs_page = sync_runs_paginator.get_page(request.GET.get("runs_page"))
         sync_runs = sync_runs_page.object_list
+        for run in sync_runs:
+            run.message_short = (run.message or "").strip()
+            if len(run.message_short) > 140:
+                run.message_short = run.message_short[:137] + "..."
 
     context = {
         "connections": connections,
@@ -3193,6 +3427,13 @@ def bybit_staging(request):
         "asset_choices": asset_choices,
         "direction_choices": direction_choices,
         "event_filters": event_filters,
-        "stream_options": stream_options,
+        "stream_options": BYBIT_STREAM_OPTIONS,
+        "stream_labels": BYBIT_STREAM_LABELS,
+        "date_from": date_from_value,
+        "date_to": date_to_value,
+        "selected_streams": selected_streams,
+        "total_count": total_count,
+        "unimported_count": unimported_count,
+        "unimported_in_period": unimported_in_period,
     }
     return render(request, "transactions/bybit.html", context)

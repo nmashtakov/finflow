@@ -10,6 +10,7 @@ from typing import Any
 from django.db.models import Prefetch, Q
 
 from capital.models import CapitalPosition, CapitalSnapshot, SteamAccount, WithdrawalSite
+from core.currencies import currencies_need_usd_rate, fx_currency_code
 from core.models import AccountBalanceSnapshot, CurrencyRate
 
 
@@ -26,7 +27,7 @@ def build_rate_lookup(currencies: set[str], max_date: date, min_date: date | Non
     lookup: dict[str, list[tuple[date, Decimal]]] = {'RUB': [(min_date, Decimal('1'))]}
     normalized = {_normalize_currency(c) for c in currencies if c}
     normalized.add('RUB')
-    if 'USDT' in normalized:
+    if currencies_need_usd_rate(normalized):
         normalized.add('USD')
     for currency in normalized:
         if currency == 'RUB':
@@ -42,9 +43,7 @@ def build_rate_lookup(currencies: set[str], max_date: date, min_date: date | Non
 
 
 def rate_on_date(rate_lookup: dict[str, list[tuple[date, Decimal]]], currency: str, target_date: date) -> Decimal | None:
-    currency = _normalize_currency(currency)
-    if currency == 'USDT':
-        currency = 'USD'
+    currency = fx_currency_code(currency) or 'RUB'
     if currency == 'RUB':
         return Decimal('1')
     rows = rate_lookup.get(currency) or []
@@ -66,7 +65,7 @@ def convert_amount(
 ) -> Decimal | None:
     source = _normalize_currency(source_currency)
     target = _normalize_currency(target_currency)
-    if not target or source == target:
+    if not target or source == target or fx_currency_code(source) == fx_currency_code(target):
         return Decimal(amount or 0)
     source_rate = rate_on_date(rate_lookup, source, target_date)
     target_rate = rate_on_date(rate_lookup, target, target_date)

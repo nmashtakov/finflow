@@ -225,3 +225,90 @@ class CryptoServicesTestCase(TestCase):
         self.assertEqual(row.quantity, Decimal('0.5'))
         self.assertEqual(row.avg_buy_price, Decimal('50010.00000000'))
         self.assertEqual(row.cost_basis, Decimal('25005.00000000'))
+
+    def test_convert_from_usdc_is_usd_quote(self):
+        connection = BybitConnection.objects.create(
+            user=self.user,
+            api_key='key',
+            api_secret='secret',
+        )
+        event = BybitExternalEvent.objects.create(
+            connection=connection,
+            stream='convert_history',
+            external_id='conv-usdc',
+            event_hash='hash-usdc',
+            occurred_at=timezone.now(),
+            asset='USDC',
+            amount=Decimal('-20'),
+            raw_payload={
+                'fromCoin': 'USDC',
+                'toCoin': 'BTC',
+                'fromAmount': '20',
+                'toAmount': '0.0003',
+                'fee': '0.01',
+            },
+        )
+        parsed = _parse_convert_event(event, {self.btc.symbol: self.btc})
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed['asset'], self.btc)
+        self.assertEqual(parsed['total_quote'], Decimal('20'))
+
+    def test_stable_to_stable_convert_is_not_a_token_trade(self):
+        connection = BybitConnection.objects.create(
+            user=self.user,
+            api_key='key',
+            api_secret='secret',
+        )
+        event = BybitExternalEvent.objects.create(
+            connection=connection,
+            stream='convert_history',
+            external_id='conv-stables',
+            event_hash='hash-stables',
+            occurred_at=timezone.now(),
+            asset='USDT',
+            amount=Decimal('-50'),
+            raw_payload={
+                'fromCoin': 'USDT',
+                'toCoin': 'USDE',
+                'fromAmount': '50',
+                'toAmount': '50',
+                'fee': '0',
+            },
+        )
+        parsed = _parse_convert_event(event, {self.btc.symbol: self.btc})
+        self.assertIsNone(parsed)
+
+    def test_trade_with_usdc_quote(self):
+        connection = BybitConnection.objects.create(
+            user=self.user,
+            api_key='key',
+            api_secret='secret',
+        )
+        moment = timezone.now()
+        usdc_event = BybitExternalEvent.objects.create(
+            connection=connection,
+            stream='uta_translog',
+            external_id='usdc-buy',
+            event_hash='hash-usdc-buy',
+            occurred_at=moment,
+            asset='USDC',
+            amount=Decimal('-100'),
+            description='TRADE',
+            raw_payload={'symbol': 'BTCUSDC', 'type': 'TRADE', 'fee': '0.02'},
+        )
+        btc_event = BybitExternalEvent.objects.create(
+            connection=connection,
+            stream='uta_translog',
+            external_id='btc-buy',
+            event_hash='hash-btc-buy',
+            occurred_at=moment,
+            asset='BTC',
+            amount=Decimal('0.001'),
+            description='TRADE',
+            raw_payload={'symbol': 'BTCUSDC', 'type': 'TRADE'},
+        )
+        parsed = _parse_trade_events([usdc_event, btc_event], {self.btc.symbol: self.btc}, set())
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]['kind'], 'buy')
+        self.assertEqual(parsed[0]['total_quote'], Decimal('100'))
+        self.assertEqual(parsed[0]['asset'], self.btc)

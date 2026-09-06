@@ -88,6 +88,7 @@ def _build_tinkoff_invest_rounding_tx(row: Dict[str, Any], base_normalized: Norm
         [
             "Округление на инвесткопилку",
             "Округление на Инвесткопилку",
+            "Округление",
             "invest_round",
         ],
     )

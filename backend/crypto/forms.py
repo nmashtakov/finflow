@@ -1,6 +1,6 @@
 from django import forms
 
-from crypto.models import CryptoAsset, CryptoPortfolioSettings, CryptoTransaction
+from crypto.models import QUOTE_CURRENCIES, CryptoAsset, CryptoPortfolioSettings, CryptoTransaction
 from transactions.models import BybitConnection
 
 
@@ -27,6 +27,8 @@ class CryptoPortfolioSettingsForm(forms.ModelForm):
         self.fields['report_currency'].choices = [
             ('USD', 'USD'),
             ('USDT', 'USDT'),
+            ('USDC', 'USDC'),
+            ('USDE', 'USDE'),
             ('RUB', 'RUB'),
         ]
 
@@ -43,7 +45,12 @@ class CryptoAssetForm(forms.ModelForm):
         }
 
     def clean_symbol(self):
-        return (self.cleaned_data.get('symbol') or '').strip().upper()
+        symbol = (self.cleaned_data.get('symbol') or '').strip().upper()
+        if symbol in QUOTE_CURRENCIES:
+            raise forms.ValidationError(
+                'USDT, USDC, USDE и USD учитываются как валюта, а не как токен криптопортфеля.'
+            )
+        return symbol
 
 
 class CryptoTransactionForm(forms.ModelForm):

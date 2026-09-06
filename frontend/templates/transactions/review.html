@@ -36,18 +36,30 @@
 
     <div class="card mb-3">
         <div class="card-body">
-            <form method="get" class="row g-2">
+            <form method="get" class="row g-2 align-items-end">
                 <input type="hidden" name="session" value="{{ session.id }}">
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Фильтр категория источника</label>
-                    <input class="form-control" type="text" name="source_category" value="{{ source_category_filter }}" placeholder="например, супермаркеты">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Категория из выгрузки</label>
+                    <select class="form-select js-review-filter-select" name="source_category" multiple data-placeholder="Все категории">
+                        {% for option in source_category_options %}
+                        <option value="{{ option }}" {% if option in source_category_filters %}selected{% endif %}>{{ option|capfirst }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Фильтр описание</label>
-                    <input class="form-control" type="text" name="description" value="{{ description_filter }}" placeholder="например, покупка">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Исключить категории</label>
+                    <select class="form-select js-review-filter-select" name="exclude_category" multiple data-placeholder="Ничего не исключать">
+                        {% for option in source_category_options %}
+                        <option value="{{ option }}" {% if option in exclude_category_filters %}selected{% endif %}>{{ option|capfirst }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="col-12 col-md-4 d-flex align-items-end">
-                    <button type="submit" class="btn btn-outline-primary me-2">Применить фильтр</button>
+                <div class="col-12 col-lg-3">
+                    <label class="form-label">Описание / комментарий</label>
+                    <input class="form-control" type="text" name="description" value="{{ description_filter }}" placeholder="например, авито">
+                </div>
+                <div class="col-12 col-lg-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-outline-primary">Применить</button>
                     <a href="{% url 'transactions:review' %}?session={{ session.id }}" class="btn btn-outline-secondary">Сбросить</a>
                 </div>
             </form>
@@ -57,8 +69,13 @@
     <form method="post" id="bulkLabelForm" class="card mb-3">
         {% csrf_token %}
         <input type="hidden" name="session" value="{{ session.id }}">
-        <input type="hidden" name="description" value="{{ description_filter }}">
-        <input type="hidden" name="source_category" value="{{ source_category_filter }}">
+        <input type="hidden" name="filter_description" value="{{ description_filter }}">
+        {% for category_value in source_category_filters %}
+        <input type="hidden" name="filter_source_category" value="{{ category_value }}">
+        {% endfor %}
+        {% for category_value in exclude_category_filters %}
+        <input type="hidden" name="filter_exclude_category" value="{{ category_value }}">
+        {% endfor %}
 
         <div class="card-body">
             <div class="row g-2 align-items-end bulk-controls-row">
@@ -120,7 +137,7 @@
                             {{ row.amount_text }}
                         </td>
                         <td>{{ row.currency }}</td>
-                        <td>{{ row.source_category_display }}</td>
+                        <td>{{ row.source_category_display|capfirst }}</td>
                         <td>
                             <input
                                 class="form-control form-control-sm js-auto-comment"
@@ -136,8 +153,13 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="session" value="{{ session.id }}">
                                 <input type="hidden" name="single_transaction_id" value="{{ row.id }}">
-                                <input type="hidden" name="description" value="{{ description_filter }}">
-                                <input type="hidden" name="source_category" value="{{ source_category_filter }}">
+                                <input type="hidden" name="filter_description" value="{{ description_filter }}">
+                                {% for category_value in source_category_filters %}
+                                <input type="hidden" name="filter_source_category" value="{{ category_value }}">
+                                {% endfor %}
+                                {% for category_value in exclude_category_filters %}
+                                <input type="hidden" name="filter_exclude_category" value="{{ category_value }}">
+                                {% endfor %}
                                 <select class="form-select form-select-sm js-auto-category js-category-search-select" id="rowExpenseLink{{ row.id }}" name="single_expense_link_id" data-tx-id="{{ row.id }}" data-last-saved="{{ row.resolved_expense_link_id|default:'' }}" required>
                                     <option value="">Категория...</option>
                                     {% for link in expense_links %}
@@ -173,11 +195,11 @@
     <nav class="mt-3">
         <ul class="pagination">
             {% if items.has_previous %}
-            <li class="page-item"><a class="page-link" href="?session={{ session.id }}&page={{ items.previous_page_number }}&description={{ description_filter }}&source_category={{ source_category_filter }}">Назад</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ review_query }}&page={{ items.previous_page_number }}">Назад</a></li>
             {% endif %}
             <li class="page-item active"><span class="page-link">{{ items.number }} / {{ items.paginator.num_pages }}</span></li>
             {% if items.has_next %}
-            <li class="page-item"><a class="page-link" href="?session={{ session.id }}&page={{ items.next_page_number }}&description={{ description_filter }}&source_category={{ source_category_filter }}">Вперёд</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ review_query }}&page={{ items.next_page_number }}">Вперёд</a></li>
             {% endif %}
         </ul>
     </nav>
@@ -207,6 +229,8 @@
         </div>
     </div>
 </div>
+{{ source_category_filters|json_script:"review-include-cats" }}
+{{ exclude_category_filters|json_script:"review-exclude-cats" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -380,6 +404,14 @@
 
         if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
             const $ = window.jQuery;
+            $('.js-review-filter-select').each(function () {
+                $(this).select2({
+                    theme: 'bootstrap-5',
+                    width: '100%',
+                    closeOnSelect: false,
+                    placeholder: this.dataset.placeholder || 'Выберите',
+                });
+            });
             searchableCategorySelects.forEach((el) => {
                 const isSmall = el.classList.contains('form-select-sm');
                 $(el).select2({
@@ -694,8 +726,11 @@
                 body.set('action', 'split_transaction');
                 body.set('single_transaction_id', splitActiveTx.id);
                 body.set('split_items', JSON.stringify(splitItems));
-                body.set('description', '{{ description_filter|escapejs }}');
-                body.set('source_category', '{{ source_category_filter|escapejs }}');
+                body.set('filter_description', '{{ description_filter|escapejs }}');
+                const includeCats = JSON.parse(document.getElementById('review-include-cats').textContent || '[]');
+                const excludeCats = JSON.parse(document.getElementById('review-exclude-cats').textContent || '[]');
+                includeCats.forEach((value) => body.append('filter_source_category', value));
+                excludeCats.forEach((value) => body.append('filter_exclude_category', value));
                 if (csrfToken) body.set('csrfmiddlewaretoken', csrfToken);
                 splitSaveBtn.disabled = true;
                 try {

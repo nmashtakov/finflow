@@ -7,6 +7,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from xml.etree import ElementTree as ET
 
+from core.currencies import USD_STABLECOINS, is_usd_stablecoin
 from core.models import CurrencyRate
 
 
@@ -66,7 +67,7 @@ def _sync_rub_rates(start_date, end_date):
     return inserted, updated
 
 
-def _sync_usdt_from_usd(start_date, end_date):
+def _sync_usd_stable_from_usd(stable_code, start_date, end_date):
     inserted = 0
     updated = 0
     usd_dates = set(
@@ -76,7 +77,7 @@ def _sync_usdt_from_usd(start_date, end_date):
         ).values_list("date", flat=True)
     )
     CurrencyRate.objects.filter(
-        currency="USDT",
+        currency=stable_code,
         date__range=(start_date, end_date),
     ).exclude(date__in=usd_dates).delete()
     usd_rows = CurrencyRate.objects.filter(
@@ -86,7 +87,7 @@ def _sync_usdt_from_usd(start_date, end_date):
     for rate_date, amount in usd_rows:
         _, created = CurrencyRate.objects.update_or_create(
             date=rate_date,
-            currency="USDT",
+            currency=stable_code,
             defaults={"amount": amount},
         )
         if created:
@@ -184,7 +185,7 @@ def sync_cbr_rates(currency_codes, start_date, end_date):
     }
 
     requested_codes = sorted(set(code.upper() for code in currency_codes if code))
-    cbr_requested_codes = [code for code in requested_codes if code not in {"RUB", "USDT"}]
+    cbr_requested_codes = [code for code in requested_codes if code not in {"RUB"} | set(USD_STABLECOINS)]
     code_map = {}
     if cbr_requested_codes:
         try:
@@ -201,11 +202,11 @@ def sync_cbr_rates(currency_codes, start_date, end_date):
             result["synced"].append("RUB")
             continue
 
-        if currency_code == "USDT":
-            inserted, updated = _sync_usdt_from_usd(start_date, end_date)
+        if is_usd_stablecoin(currency_code):
+            inserted, updated = _sync_usd_stable_from_usd(currency_code, start_date, end_date)
             result["inserted"] += inserted
             result["updated"] += updated
-            result["synced"].append("USDT")
+            result["synced"].append(currency_code)
             continue
 
         cbr_code = code_map.get(currency_code)
@@ -244,7 +245,7 @@ def sync_cbr_rates_incremental(currency_codes, default_start_date, end_date):
     }
 
     requested_codes = sorted(set(code.upper() for code in currency_codes if code))
-    cbr_requested_codes = [code for code in requested_codes if code not in {"RUB", "USDT"}]
+    cbr_requested_codes = [code for code in requested_codes if code not in {"RUB"} | set(USD_STABLECOINS)]
     code_map = {}
     if cbr_requested_codes:
         try:
@@ -272,7 +273,7 @@ def sync_cbr_rates_incremental(currency_codes, default_start_date, end_date):
             result["synced"].append("RUB")
             continue
 
-        if currency_code == "USDT":
+        if is_usd_stablecoin(currency_code):
             usd_latest_date = (
                 CurrencyRate.objects.filter(currency="USD")
                 .order_by("-date")
@@ -280,12 +281,12 @@ def sync_cbr_rates_incremental(currency_codes, default_start_date, end_date):
                 .first()
             )
             sync_end_date = min(end_date, usd_latest_date) if usd_latest_date else end_date
-            inserted, updated = _sync_usdt_from_usd(default_start_date, sync_end_date)
+            inserted, updated = _sync_usd_stable_from_usd(currency_code, default_start_date, sync_end_date)
             if usd_latest_date:
-                CurrencyRate.objects.filter(currency="USDT", date__gt=usd_latest_date).delete()
+                CurrencyRate.objects.filter(currency=currency_code, date__gt=usd_latest_date).delete()
             result["inserted"] += inserted
             result["updated"] += updated
-            result["synced"].append("USDT")
+            result["synced"].append(currency_code)
             continue
 
         if start_date > end_date:
