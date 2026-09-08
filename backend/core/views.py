@@ -1,6 +1,6 @@
 from bisect import bisect_right
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -339,6 +339,109 @@ def _query_values(request, key):
     return [single] if single else []
 
 
+DASHBOARD_PERIOD_PRESETS = ('year', '12m', 'month', 'last_month', 'custom')
+DASHBOARD_PIVOT_METRICS = ('expense', 'income', 'net', 'all')
+
+
+def last_month_bounds(today: date) -> tuple[date, date]:
+    end_date = date(today.year, today.month, 1) - timedelta(days=1)
+    start_date = date(end_date.year, end_date.month, 1)
+    return start_date, end_date
+
+
+def _expense_category_rows(tx_list, converted_by_tx, expense_contrib, analytics_mode):
+    category_source = expense_contrib if analytics_mode == 'net' else {
+        tx.id: abs(converted_by_tx[tx.id])
+        for tx in tx_list
+        if converted_by_tx.get(tx.id) is not None
+        and converted_by_tx[tx.id] < 0
+        and ((tx.expense_link.subcategory.name if tx.expense_link and tx.expense_link.subcategory else '') or '').strip().lower() != 'перевод между счетами'
+    }
+    category_totals = {}
+    for tx in tx_list:
+        amount_abs = category_source.get(tx.id)
+        if not amount_abs:
+            continue
+        category_name = tx.expense_link.category.name if tx.expense_link_id else '—'
+        category_totals[category_name] = category_totals.get(category_name, Decimal('0')) + amount_abs
+    total_expense_abs = sum(category_totals.values(), Decimal('0'))
+    has_expense = total_expense_abs > 0
+    denominator = total_expense_abs if has_expense else Decimal('1')
+    return [
+        {
+            'name': category_name or '—',
+            'total': _format_amount(total_value or 0, decimals=0),
+            'percent': round((total_value / denominator) * 100, 1) if has_expense else 0,
+        }
+        for category_name, total_value in sorted(category_totals.items(), key=lambda item: item[1], reverse=True)[:8]
+    ]
+
+
+def _empty_pivot_bucket():
+    return {'income': Decimal('0'), 'expense': Decimal('0'), 'net': Decimal('0')}
+
+
+def _add_pivot_amount(node, month_bucket, income_value, expense_value, net_value):
+    month_entry = node['months'][month_bucket]
+    month_entry['income'] += income_value
+    month_entry['expense'] += expense_value
+    month_entry['net'] += net_value
+    node['totals']['income'] += income_value
+    node['totals']['expense'] += expense_value
+    node['totals']['net'] += net_value
+
+
+def resolve_dashboard_period(request, now=None):
+    now = now or timezone.localtime()
+    tz = timezone.get_current_timezone()
+    today = now.date()
+    period_preset = (request.GET.get('period') or '').strip().lower()
+    start_param = (request.GET.get('start') or '').strip()
+    end_param = (request.GET.get('end') or '').strip()
+    if period_preset not in DASHBOARD_PERIOD_PRESETS:
+        period_preset = 'custom' if (start_param or end_param) else 'year'
+
+    def aware_start(value: date):
+        return timezone.make_aware(datetime.combine(value, time.min), tz)
+
+    def aware_end(value: date):
+        return timezone.make_aware(datetime.combine(value, time.max), tz)
+
+    if period_preset == 'year':
+        start_date = date(today.year, 1, 1)
+        end_date = today
+    elif period_preset == 'month':
+        start_date = date(today.year, today.month, 1)
+        end_date = today
+    elif period_preset == 'last_month':
+        start_date, end_date = last_month_bounds(today)
+    elif period_preset == '12m':
+        month = today.month - 11
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        start_date = date(year, month, 1)
+        end_date = today
+    else:
+        start_date = date(today.year, 1, 1)
+        end_date = today
+        if start_param:
+            try:
+                start_date = datetime.strptime(start_param, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if end_param:
+            try:
+                end_date = datetime.strptime(end_param, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+    return period_preset, aware_start(start_date), aware_end(end_date)
+
+
 def _apply_transaction_filters(qs, account_ids, project_ids, category_ids, subcategory_ids, currencies, direction):
     if account_ids:
         qs = qs.filter(account_id__in=account_ids)
@@ -360,9 +463,6 @@ def _apply_transaction_filters(qs, account_ids, project_ids, category_ids, subca
 def dashboard_view(request):
     user = request.user
     now = timezone.localtime()
-    current_month_start = timezone.make_aware(datetime(now.year, now.month, 1), timezone.get_current_timezone())
-    start_param = request.GET.get('start')
-    end_param = request.GET.get('end')
     account_values = [int(value) for value in _query_values(request, 'account') if value.isdigit()]
     project_values = [int(value) for value in _query_values(request, 'project') if value.isdigit()]
     category_values = [int(value) for value in _query_values(request, 'category') if value.isdigit()]
@@ -371,23 +471,11 @@ def dashboard_view(request):
     direction_param = (request.GET.get('direction') or '').strip().lower()
     report_currency = (request.GET.get('report_currency') or 'RUB').strip().upper()
     analytics_mode = (request.GET.get('analytics_mode') or 'net').strip().lower()
-    chart_range = (request.GET.get('chart_range') or '2y').strip().lower()
+    pivot_metric = (request.GET.get('pivot_metric') or 'expense').strip().lower()
+    if pivot_metric not in DASHBOARD_PIVOT_METRICS:
+        pivot_metric = 'expense'
     focus_month = (request.GET.get('focus_month') or '').strip()
-
-    period_start = current_month_start
-    if start_param:
-        try:
-            parsed = datetime.strptime(start_param, '%Y-%m-%d')
-            period_start = timezone.make_aware(datetime.combine(parsed.date(), time.min), timezone.get_current_timezone())
-        except ValueError:
-            pass
-    period_end = timezone.make_aware(datetime.combine(now.date(), time.max), timezone.get_current_timezone())
-    if end_param:
-        try:
-            parsed = datetime.strptime(end_param, '%Y-%m-%d')
-            period_end = timezone.make_aware(datetime.combine(parsed.date(), time.max), timezone.get_current_timezone())
-        except ValueError:
-            pass
+    period_preset, period_start, period_end = resolve_dashboard_period(request, now)
 
     focus_period_start = None
     focus_period_end = None
@@ -426,19 +514,8 @@ def dashboard_view(request):
     )
     filtered_qs = base_qs.filter(date__range=(effective_period_start, effective_period_end))
 
-    chart_start = timezone.make_aware(datetime(now.year - 1, 1, 1), timezone.get_current_timezone())
-    chart_end = timezone.make_aware(datetime(now.year, 12, 31, 23, 59, 59), timezone.get_current_timezone())
-    if chart_range == 'all':
-        first_chart_tx = base_qs.order_by('date').values_list('date', flat=True).first()
-        if first_chart_tx:
-            chart_start = first_chart_tx
-            chart_end = period_end
-        else:
-            chart_start = period_start
-            chart_end = period_end
-    elif chart_range == 'period':
-        chart_start = period_start
-        chart_end = period_end
+    chart_start = period_start
+    chart_end = period_end
 
     tx_list = list(
         filtered_qs.select_related(
@@ -456,7 +533,18 @@ def dashboard_view(request):
             'account',
         )
     )
-    rate_lookup = _build_rate_lookup(tx_list + chart_tx_list, report_currency)
+    last_month_start_date, last_month_end_date = last_month_bounds(now.date())
+    last_month_start = timezone.make_aware(datetime.combine(last_month_start_date, time.min), timezone.get_current_timezone())
+    last_month_end = timezone.make_aware(datetime.combine(last_month_end_date, time.max), timezone.get_current_timezone())
+    last_month_tx_list = list(
+        base_qs.filter(date__range=(last_month_start, last_month_end)).select_related(
+            'expense_link__project',
+            'expense_link__category',
+            'expense_link__subcategory',
+            'account',
+        )
+    )
+    rate_lookup = _build_rate_lookup(tx_list + chart_tx_list + last_month_tx_list, report_currency)
     tx_ids = {tx.id for tx in tx_list}
     tx_date_by_id = {tx.id: tx.date for tx in tx_list}
     converted_by_tx = {}
@@ -544,21 +632,24 @@ def dashboard_view(request):
     )
     average_expense = (total_expense_abs / expense_operation_count) if expense_operation_count else Decimal('0')
     net_amount = total_income - total_expense_abs
-    has_expense = total_expense_abs > 0
-    denominator = total_expense_abs if has_expense else Decimal('1')
 
-    category_totals = {}
-    category_source = expense_contrib if analytics_mode == 'net' else {
-        tx.id: abs(converted_by_tx[tx.id])
-        for tx in tx_list
-        if converted_by_tx.get(tx.id) is not None
-        and converted_by_tx[tx.id] < 0
-        and ((tx.expense_link.subcategory.name if tx.expense_link and tx.expense_link.subcategory else '') or '').strip().lower() != 'перевод между счетами'
-    }
-    for tx_id, amount_abs in category_source.items():
-        category_name = expense_category_by_tx.get(tx_id) or '—'
-        category_totals[category_name] = category_totals.get(category_name, Decimal('0')) + amount_abs
-    top_expense_categories_raw = sorted(category_totals.items(), key=lambda item: item[1], reverse=True)[:8]
+    top_expense_categories = _expense_category_rows(tx_list, converted_by_tx, expense_contrib, analytics_mode)
+    last_month_converted = {}
+    for tx in last_month_tx_list:
+        last_month_converted[tx.id] = _convert_amount(
+            tx.amount,
+            tx.currency,
+            report_currency,
+            timezone.localtime(tx.date).date(),
+            rate_lookup,
+        )
+    last_month_netting = _build_reimbursement_netting(last_month_tx_list, last_month_converted)
+    top_expense_categories_last_month = _expense_category_rows(
+        last_month_tx_list,
+        last_month_converted,
+        last_month_netting['expense_contrib'],
+        analytics_mode,
+    )
 
     project_summary_map = {}
     pivot_summary_map = {}
@@ -627,34 +718,31 @@ def dashboard_view(request):
             project_name,
             {
                 'project_id': tx.expense_link.project_id,
-                'months': defaultdict(lambda: Decimal('0')),
-                'total': Decimal('0'),
+                'months': defaultdict(_empty_pivot_bucket),
+                'totals': _empty_pivot_bucket(),
                 'categories': {},
             }
         )
-        pivot_project['months'][month_bucket] += net_value
-        pivot_project['total'] += net_value
+        _add_pivot_amount(pivot_project, month_bucket, income_value, expense_value, net_value)
         pivot_category = pivot_project['categories'].setdefault(
             category_name,
             {
                 'category_id': tx.expense_link.category_id,
-                'months': defaultdict(lambda: Decimal('0')),
-                'total': Decimal('0'),
+                'months': defaultdict(_empty_pivot_bucket),
+                'totals': _empty_pivot_bucket(),
                 'subcategories': {},
             }
         )
-        pivot_category['months'][month_bucket] += net_value
-        pivot_category['total'] += net_value
-        pivot_category['subcategories'].setdefault(
+        _add_pivot_amount(pivot_category, month_bucket, income_value, expense_value, net_value)
+        pivot_subcategory = pivot_category['subcategories'].setdefault(
             subcategory_label,
             {
                 'subcategory_id': tx.expense_link.subcategory_id or '',
-                'months': defaultdict(lambda: Decimal('0')),
-                'total': Decimal('0'),
+                'months': defaultdict(_empty_pivot_bucket),
+                'totals': _empty_pivot_bucket(),
             }
         )
-        pivot_category['subcategories'][subcategory_label]['months'][month_bucket] += net_value
-        pivot_category['subcategories'][subcategory_label]['total'] += net_value
+        _add_pivot_amount(pivot_subcategory, month_bucket, income_value, expense_value, net_value)
 
     chart_converted = {}
     chart_expense_contrib = {}
@@ -741,7 +829,10 @@ def dashboard_view(request):
         cumulative_total += Decimal(str(value))
         cumulative_values.append(float(cumulative_total))
 
-    month_labels = sorted(set(month_income_map.keys()) | set(month_expense_map.keys()))
+    month_labels = sorted(
+        set(month_income_map.keys()) | set(month_expense_map.keys()),
+        key=lambda label: datetime.strptime(label, '%m.%Y'),
+    )
     month_income_values = [float(month_income_map[label]) for label in month_labels]
     month_expense_values = [float(month_expense_map[label]) for label in month_labels]
 
@@ -749,11 +840,40 @@ def dashboard_view(request):
     pivot_month_labels = [month.strftime('%m.%Y') for month in pivot_months]
     pivot_month_count = len(pivot_months)
 
-    def _pivot_cell(value, row_max_abs, month):
+    def _metric_value(bucket, metric=None):
+        if not bucket:
+            return Decimal('0')
+        key = metric or ('expense' if pivot_metric == 'all' else pivot_metric)
+        return bucket.get(key) or Decimal('0')
+
+    def _stack_lines(bucket, divisor=Decimal('1')):
+        expense = _metric_value(bucket, 'expense') / divisor
+        income = _metric_value(bucket, 'income') / divisor
+        leftover = _metric_value(bucket, 'net') / divisor
+        return [
+            {'text': _format_amount(expense, decimals=0) if expense else '—', 'css': 'text-danger'},
+            {'text': _format_amount(income, decimals=0) if income else '—', 'css': 'text-success'},
+            {'text': _format_amount(leftover, decimals=0) if leftover else '—', 'css': 'text-success' if leftover >= 0 else 'text-danger'},
+        ]
+
+    def _pivot_cell(bucket, row_max_abs, month):
+        if pivot_metric == 'all':
+            return {
+                'display': '',
+                'lines': _stack_lines(bucket or _empty_pivot_bucket()),
+                'raw': '',
+                'month_label': month.strftime('%m.%Y'),
+                'background': '',
+            }
+        value = _metric_value(bucket)
         intensity = 0
         if value and row_max_abs > 0:
             intensity = max(8, min(38, int((abs(value) / row_max_abs) * 38)))
-        if value > 0:
+        if pivot_metric == 'expense':
+            background = f'rgba(220, 38, 38, {intensity / 100:.2f})' if intensity and value else ''
+        elif pivot_metric == 'income':
+            background = f'rgba(22, 163, 74, {intensity / 100:.2f})' if intensity and value else ''
+        elif value > 0:
             background = f'rgba(22, 163, 74, {intensity / 100:.2f})' if intensity else ''
         elif value < 0:
             background = f'rgba(220, 38, 38, {intensity / 100:.2f})' if intensity else ''
@@ -761,27 +881,58 @@ def dashboard_view(request):
             background = ''
         return {
             'display': _format_amount(value, decimals=0) if value else '—',
+            'lines': [],
             'raw': str(value),
             'month_label': month.strftime('%m.%Y'),
             'background': background,
         }
 
     def _pivot_values(month_map):
-        row_max_abs = max((abs(month_map.get(month, Decimal('0'))) for month in pivot_months), default=Decimal('0'))
-        return [_pivot_cell(month_map.get(month, Decimal('0')), row_max_abs, month) for month in pivot_months]
+        buckets = [month_map.get(month) or _empty_pivot_bucket() for month in pivot_months]
+        row_max_abs = max((abs(_metric_value(bucket)) for bucket in buckets), default=Decimal('0'))
+        return [_pivot_cell(bucket, row_max_abs, month) for bucket, month in zip(buckets, pivot_months)]
 
+    def _pivot_total_display(totals):
+        if pivot_metric == 'all':
+            return ''
+        value = _metric_value(totals)
+        if not value:
+            return '—'
+        return _format_amount(value, decimals=0)
+
+    def _pivot_average_display(totals):
+        if pivot_metric == 'all':
+            return ''
+        value = _metric_value(totals)
+        if not pivot_month_count or not value:
+            return '—'
+        return _format_amount(value / pivot_month_count, decimals=0)
+
+    def _pivot_total_lines(totals):
+        if pivot_metric != 'all':
+            return []
+        return _stack_lines(totals)
+
+    def _pivot_average_lines(totals):
+        if pivot_metric != 'all' or not pivot_month_count:
+            return []
+        return _stack_lines(totals, Decimal(pivot_month_count))
+
+    sort_metric = 'expense' if pivot_metric == 'all' else pivot_metric
     pivot_rows = []
     for project_name, project_data in sorted(
         pivot_summary_map.items(),
-        key=lambda item: sum(item[1]['months'].values()),
+        key=lambda item: item[1]['totals'].get(sort_metric, Decimal('0')),
         reverse=True,
     ):
         pivot_rows.append({
             'label': project_name,
             'level': 0,
             'values': _pivot_values(project_data['months']),
-            'total': _format_amount(project_data['total'], decimals=0) if project_data['total'] else '—',
-            'average': _format_amount(project_data['total'] / pivot_month_count, decimals=0) if pivot_month_count and project_data['total'] else '—',
+            'total': _pivot_total_display(project_data['totals']),
+            'average': _pivot_average_display(project_data['totals']),
+            'total_lines': _pivot_total_lines(project_data['totals']),
+            'average_lines': _pivot_average_lines(project_data['totals']),
             'row_key': f"project-{len(pivot_rows)}",
             'parent_key': '',
             'project_id': project_data['project_id'],
@@ -791,15 +942,17 @@ def dashboard_view(request):
         project_row_key = pivot_rows[-1]['row_key']
         for category_name, category_data in sorted(
             project_data['categories'].items(),
-            key=lambda item: item[1]['total'],
+            key=lambda item: item[1]['totals'].get(sort_metric, Decimal('0')),
             reverse=True,
         ):
             pivot_rows.append({
                 'label': category_name,
                 'level': 1,
                 'values': _pivot_values(category_data['months']),
-                'total': _format_amount(category_data['total'], decimals=0) if category_data['total'] else '—',
-                'average': _format_amount(category_data['total'] / pivot_month_count, decimals=0) if pivot_month_count and category_data['total'] else '—',
+                'total': _pivot_total_display(category_data['totals']),
+                'average': _pivot_average_display(category_data['totals']),
+                'total_lines': _pivot_total_lines(category_data['totals']),
+                'average_lines': _pivot_average_lines(category_data['totals']),
                 'row_key': f"{project_row_key}-category-{len(pivot_rows)}",
                 'parent_key': project_row_key,
                 'project_id': project_data['project_id'],
@@ -807,47 +960,40 @@ def dashboard_view(request):
                 'subcategory_id': '',
             })
             category_row_key = pivot_rows[-1]['row_key']
-            for subcategory_name, subcategory_months in sorted(
+            for subcategory_name, subcategory_data in sorted(
                 category_data['subcategories'].items(),
-                key=lambda item: item[1]['total'],
+                key=lambda item: item[1]['totals'].get(sort_metric, Decimal('0')),
                 reverse=True,
             ):
                 pivot_rows.append({
                     'label': subcategory_name,
                     'level': 2,
-                    'values': _pivot_values(subcategory_months['months']),
-                    'total': _format_amount(subcategory_months['total'], decimals=0) if subcategory_months['total'] else '—',
-                    'average': _format_amount(subcategory_months['total'] / pivot_month_count, decimals=0) if pivot_month_count and subcategory_months['total'] else '—',
+                    'values': _pivot_values(subcategory_data['months']),
+                    'total': _pivot_total_display(subcategory_data['totals']),
+                    'average': _pivot_average_display(subcategory_data['totals']),
+                    'total_lines': _pivot_total_lines(subcategory_data['totals']),
+                    'average_lines': _pivot_average_lines(subcategory_data['totals']),
                     'row_key': f"{category_row_key}-subcategory-{len(pivot_rows)}",
                     'parent_key': category_row_key,
                     'project_id': project_data['project_id'],
                     'category_id': category_data['category_id'],
-                    'subcategory_id': subcategory_months['subcategory_id'],
+                    'subcategory_id': subcategory_data['subcategory_id'],
                 })
-
-    recent_transactions = []
-    for tx in sorted(tx_list, key=lambda item: item.date, reverse=True)[:12]:
-        converted_amount = converted_by_tx.get(tx.id)
-        recent_transactions.append({
-            'date': timezone.localtime(tx.date).strftime('%d.%m.%Y %H:%M'),
-            'account': tx.account.name,
-            'project': tx.expense_link.project.name if tx.expense_link_id else '—',
-            'category': tx.expense_link.category.name if tx.expense_link_id else '—',
-            'amount': f"{'+' if tx.amount >= 0 else '-'}{_format_amount(abs(tx.amount))} {tx.currency}",
-            'report_amount': (
-                f"{'+' if converted_amount >= 0 else '-'}{_format_amount(abs(converted_amount))} {report_currency}"
-                if converted_amount is not None else 'Нет курса'
-            ),
-            'is_income': tx.amount >= 0,
-            'comment': tx.comment or '—',
-        })
 
     accounts = Account.objects.filter(user=user, status='active').order_by('name')
     projects = Project.objects.filter(user=user, status='active').order_by('name')
     categories = Category.objects.filter(user=user, status='active').order_by('name')
     subcategories = Subcategory.objects.filter(user=user, status='active').order_by('name')
     currencies = Currency.objects.filter(status='active').order_by('code')
-    checklist_context = _build_checklist_context(user, period_start, period_end, tx_list, accounts)
+    has_more_filters = bool(
+        account_values or category_values or subcategory_values or currency_values or direction_param
+    )
+    pivot_metric_labels = {
+        'expense': 'Расходы',
+        'income': 'Поступления',
+        'net': 'Сколько осталось',
+        'all': 'Все сразу',
+    }
 
     context = {
         'total_income': _format_amount(total_income, decimals=0),
@@ -872,9 +1018,13 @@ def dashboard_view(request):
             'direction': direction_param,
             'report_currency': report_currency,
             'analytics_mode': analytics_mode,
-            'chart_range': chart_range,
+            'period': period_preset,
+            'pivot_metric': pivot_metric,
             'focus_month': focus_month,
         },
+        'has_more_filters': has_more_filters,
+        'pivot_metric': pivot_metric,
+        'pivot_metric_label': pivot_metric_labels[pivot_metric],
         'accounts': accounts,
         'projects': projects,
         'categories': categories,
@@ -940,14 +1090,8 @@ def dashboard_view(request):
         ),
         'report_currency': report_currency,
         'analytics_mode': analytics_mode,
-        'top_expense_categories': [
-            {
-                'name': category_name or '—',
-                'total': _format_amount(total_value or 0, decimals=0),
-                'percent': round((total_value / denominator) * 100, 1) if has_expense else 0,
-            }
-            for category_name, total_value in top_expense_categories_raw
-        ],
+        'top_expense_categories': top_expense_categories,
+        'top_expense_categories_last_month': top_expense_categories_last_month,
         'trend_labels': trend_labels,
         'trend_values': trend_values,
         'cumulative_values': cumulative_values,
@@ -957,7 +1101,6 @@ def dashboard_view(request):
         'pivot_months': pivot_month_labels,
         'pivot_rows': pivot_rows,
         'focus_month_label': focus_month_label,
-        'recent_transactions': recent_transactions,
         'project_summaries': [
             {
                 'name': project_name,
